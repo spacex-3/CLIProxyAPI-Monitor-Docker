@@ -82,5 +82,10 @@ export async function performSync(request: Request) {
   return NextResponse.json({ status: "ok", inserted: rows.length, db: result });
 }
 
-export const POST = (request: Request) => performSync(request);
-export const GET = POST;
+export async function POST(request: Request) {
+  return performSync(request);
+}
+
+export async function GET(request: Request) {
+  return performSync(request);
+}
