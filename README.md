@@ -12,11 +12,13 @@
 1. Fork 本仓库，创建 Vercel 项目并关联
 2. 在 Vercel 环境变量中填写：
 
-	- CLIPROXY_SECRET_KEY (即登录后台管理界面的管理密钥)
-	- CLIPROXY_API_BASE_URL (即自部署的 CLIProxyAPI 根地址)
-	- DATABASE_URL (仅支持 Postgres，可直接使用 Vercel Neon)
-	- PASSWORD (可选，默认使用 CLIPROXY_SECRET_KEY，访问密码，同时用于调用 `/api/sync` 的 Bearer)
-	- CRON_SECRET (若要使用 Vercel Cron 则需填，任意字符串即可，建议大于 16 位)
+	| 环境变量 | 说明 | 备注 / 默认值 |
+	|---|---|---|
+	| CLIPROXY_SECRET_KEY | 登录 CLIProxyAPI 后台管理界面的密钥 | 无 |
+	| CLIPROXY_API_BASE_URL | 自部署的 CLIProxyAPI 根地址 | 如 `https://your-domain.com/` |
+	| DATABASE_URL | 数据库连接串（仅支持 Postgres） | 亦可直接使用 Vercel Neon |
+	| PASSWORD | 访问密码，同时用于调用 `/api/sync` | 可选；默认使用 `CLIPROXY_SECRET_KEY` |
+	| CRON_SECRET | 使用 Vercel Cron 时需填写 | 任意字符串即可；建议长度 ≥ 16 |
 
 3. 部署后，可通过以下方式自动同步上游使用数据：
 
