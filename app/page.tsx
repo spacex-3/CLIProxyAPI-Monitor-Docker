@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, useMemo, useRef, type FormEvent } fro
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar, Legend, ComposedChart, PieChart, Pie, Cell } from "recharts";
 import type { TooltipProps } from "recharts";
 import { formatCurrency, formatNumber, formatCompactNumber, formatNumberWithCommas, formatHourLabel } from "@/lib/utils";
-import { AlertTriangle, Info, LucideIcon, Activity, Save, RefreshCw, Moon, Sun, Pencil, Trash2, X, Maximize2 } from "lucide-react";
+import { AlertTriangle, Info, LucideIcon, Activity, Save, RefreshCw, Moon, Sun, Pencil, Trash2, Maximize2 } from "lucide-react";
 import type { ModelPrice, UsageOverview, UsageSeriesPoint } from "@/lib/types";
+import { Modal } from "@/app/components/Modal";
 
 // 饼图颜色 - 柔和配色
 const PIE_COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#c084fc", "#f472b6", "#38bdf8", "#a3e635", "#fb923c"];
@@ -176,7 +177,7 @@ export default function DashboardPage() {
 
   const trendConfig = useMemo(() => {
     const defs = {
-      requests: { color: "#3b82f6", formatter: (v: any) => formatCompactNumber(v), name: "请求数" },
+      requests: { color: darkMode ? "#60a5fa" : "#3b82f6", formatter: (v: any) => formatCompactNumber(v), name: "请求数" },
       tokens: { color: "#10b981", formatter: (v: any) => formatCompactNumber(v), name: "Tokens" },
       cost: { color: "#fbbf24", formatter: (v: any) => formatCurrency(v), name: "费用" },
     };
@@ -226,7 +227,7 @@ export default function DashboardPage() {
       rightAxis: defs[rightAxisKey as keyof typeof defs],
       rightAxisVisible
     };
-  }, [trendVisible]);
+  }, [trendVisible, darkMode]);
 
   const cancelPieLegendClear = useCallback(() => {
     if (pieLegendClearTimerRef.current !== null) {
@@ -740,19 +741,19 @@ export default function DashboardPage() {
               <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <div className="flex items-center justify-between">
                   <span className={darkMode ? "text-slate-400" : "text-slate-500"}>输入</span>
-                  <span className="font-medium text-blue-400">{formatNumberWithCommas(overviewData.totalInputTokens)}</span>
+                  <span className={`font-medium ${darkMode ? "text-rose-400" : "text-rose-600"}`}>{formatNumberWithCommas(overviewData.totalInputTokens)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className={darkMode ? "text-slate-400" : "text-slate-500"}>输出</span>
-                  <span className="font-medium text-emerald-400">{formatNumberWithCommas(overviewData.totalOutputTokens)}</span>
+                  <span className={`font-medium ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>{formatNumberWithCommas(overviewData.totalOutputTokens)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className={darkMode ? "text-slate-400" : "text-slate-500"}>思考</span>
-                  <span className="font-medium text-amber-400">{formatNumberWithCommas(overviewData.totalReasoningTokens)}</span>
+                  <span className={`font-medium ${darkMode ? "text-amber-400" : "text-amber-600"}`}>{formatNumberWithCommas(overviewData.totalReasoningTokens)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className={darkMode ? "text-slate-400" : "text-slate-500"}>缓存</span>
-                  <span className="font-medium text-purple-400">{formatNumberWithCommas(overviewData.totalCachedTokens)}</span>
+                  <span className={`font-medium ${darkMode ? "text-purple-400" : "text-purple-600"}`}>{formatNumberWithCommas(overviewData.totalCachedTokens)}</span>
                 </div>
               </div>
             </div>
@@ -847,20 +848,68 @@ export default function DashboardPage() {
                     width={0}
                   />
                   <Tooltip 
-                    contentStyle={{ borderRadius: 12, backgroundColor: "rgba(0,0,0,0.8)", border: "1px solid rgba(100,116,139,0.6)", color: "#f8fafc" }}
-                    formatter={trendTooltipFormatter}
-                    itemSorter={(item) => ({ requests: 0, tokens: 1, cost: 2 } as Record<string, number>)[item?.dataKey as string] ?? 999}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || !payload.length) return null;
+                      const sortedPayload = [...payload].sort((a: any, b: any) => {
+                        const order: Record<string, number> = { requests: 0, tokens: 1, cost: 2 };
+                        return (order[a.dataKey] ?? 999) - (order[b.dataKey] ?? 999);
+                      });
+                      return (
+                        <div 
+                          className="rounded-xl px-4 py-3 shadow-xl backdrop-blur-sm"
+                          style={{ 
+                            backgroundColor: darkMode ? "rgba(15, 23, 42, 0.7)" : "rgba(255, 255, 255, 0.8)", 
+                            border: `1px solid ${darkMode ? "rgba(148, 163, 184, 0.4)" : "rgba(203, 213, 225, 0.6)"}`,
+                            color: darkMode ? "#f8fafc" : "#0f172a"
+                          }}
+                        >
+                          <p className={`mb-2 font-medium text-sm ${darkMode ? "text-slate-50" : "text-slate-900"}`}>{label}</p>
+                          <div className="space-y-1">
+                            {sortedPayload.map((entry: any, index: number) => {
+                              let color = entry.color;
+                              if (entry.name === "请求数") color = darkMode ? "#60a5fa" : "#3b82f6";
+                              if (entry.name === "Tokens") color = "#10b981";
+                              if (entry.name === "费用") color = "#fbbf24";
+                              
+                              const value = entry.name === "费用" ? formatCurrency(entry.value) : formatNumberWithCommas(entry.value);
+                              
+                              return (
+                                <div key={index} className="flex items-center gap-2 text-sm">
+                                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                                  <span style={{ color: color }} className="font-medium">
+                                    {entry.name}:
+                                  </span>
+                                  <span className={darkMode ? "text-slate-50" : "text-slate-700"}>
+                                    {value}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }}
                   />
                   <TrendLegend 
                     height={24} 
                     iconSize={10} 
                     wrapperStyle={{ paddingTop: 0, paddingBottom: 0, lineHeight: "24px", cursor: "pointer" }} 
                     onClick={handleTrendLegendClick}
+                    formatter={(value: string) => {
+                      const keyMap: Record<string, string> = { "请求数": "requests", "Tokens": "tokens", "费用": "cost" };
+                      const key = keyMap[value];
+                      const isVisible = trendVisible[key];
+                      if (!isVisible) {
+                        return <span style={{ color: darkMode ? "#94a3b8" : "#cbd5e1", textDecoration: "line-through" }}>{value}</span>;
+                      }
+                      const colors: Record<string, string> = { "请求数": darkMode ? "#60a5fa" : "#3b82f6", "Tokens": "#10b981", "费用": "#fbbf24" };
+                      return <span style={{ color: colors[value] || "inherit", fontWeight: 500 }}>{value}</span>;
+                    }}
                     itemSorter={(item: any) => ({ requests: 0, tokens: 1, cost: 2 } as Record<string, number>)[item?.dataKey] ?? 999}
                   />
-                  <Line hide={!trendVisible.requests} yAxisId={trendConfig.lineAxisMap.requests} type="monotone" dataKey="requests" stroke="#3b82f6" strokeWidth={2} name="请求数" dot={{ r: 3 }} />
-                  <Line hide={!trendVisible.tokens} yAxisId={trendConfig.lineAxisMap.tokens} type="monotone" dataKey="tokens" stroke="#10b981" strokeWidth={2} name="Tokens" dot={{ r: 3 }} />
-                  <Line hide={!trendVisible.cost} yAxisId={trendConfig.lineAxisMap.cost} type="monotone" dataKey="cost" stroke="#fbbf24" strokeWidth={2} name="费用" dot={{ r: 3 }} />
+                  <Line hide={!trendVisible.requests} yAxisId={trendConfig.lineAxisMap.requests} type="monotone" dataKey="requests" stroke={darkMode ? "#60a5fa" : "#3b82f6"} strokeWidth={2} name="请求数" dot={{ r: 3, fill: darkMode ? "#60a5fa" : "#3b82f6", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} />
+                  <Line hide={!trendVisible.tokens} yAxisId={trendConfig.lineAxisMap.tokens} type="monotone" dataKey="tokens" stroke="#10b981" strokeWidth={2} name="Tokens" dot={{ r: 3, fill: "#10b981", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} />
+                  <Line hide={!trendVisible.cost} yAxisId={trendConfig.lineAxisMap.cost} type="monotone" dataKey="cost" stroke="#fbbf24" strokeWidth={2} name="费用" dot={{ r: 3, fill: "#fbbf24", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -953,12 +1002,24 @@ export default function DashboardPage() {
                           const data = payload[0].payload;
                           return (
                             <div
-                              className="rounded-xl px-3 py-2 text-sm shadow-lg"
-                              style={{ backgroundColor: "rgba(0,0,0,0.8)", border: "1px solid rgba(100,116,139,0.6)", color: "#f8fafc" }}
+                              className="rounded-xl px-4 py-3 shadow-xl backdrop-blur-sm"
+                              style={{ 
+                                backgroundColor: darkMode ? "rgba(15, 23, 42, 0.7)" : "rgba(255, 255, 255, 0.8)", 
+                                border: `1px solid ${darkMode ? "rgba(148, 163, 184, 0.4)" : "rgba(203, 213, 225, 0.6)"}`,
+                                color: darkMode ? "#f8fafc" : "#0f172a"
+                              }}
                             >
-                              <p className="font-semibold text-slate-50">{data.model}</p>
-                              <p className="text-blue-300">{formatNumberWithCommas(data.requests)} 请求数</p>
-                              <p className="text-emerald-300">{formatNumberWithCommas(data.tokens)} tokens</p>
+                              <p className={`mb-2 font-medium text-sm ${darkMode ? "text-slate-50" : "text-slate-900"}`}>{data.model}</p>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="text-blue-400 font-medium">请求数:</span>
+                                  <span className={darkMode ? "text-slate-50" : "text-slate-700"}>{formatNumberWithCommas(data.requests)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="text-emerald-400 font-medium">Tokens:</span>
+                                  <span className={darkMode ? "text-slate-50" : "text-slate-700"}>{formatNumberWithCommas(data.tokens)}</span>
+                                </div>
+                              </div>
                             </div>
                           );
                         }}
@@ -1071,33 +1132,112 @@ export default function DashboardPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={hourlySeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradInput" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fca5a5" />
+                      <stop offset="100%" stopColor="#f87171" />
+                    </linearGradient>
+                    <linearGradient id="gradOutput" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#86efac" />
+                      <stop offset="100%" stopColor="#4ade80" />
+                    </linearGradient>
+                    <linearGradient id="gradReasoning" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fcd34d" />
+                      <stop offset="100%" stopColor="#fbbf24" />
+                    </linearGradient>
+                    <linearGradient id="gradCached" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#d8b4fe" />
+                      <stop offset="100%" stopColor="#c084fc" />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#334155" : "#e2e8f0"} />
                   <XAxis dataKey="label" stroke={darkMode ? "#94a3b8" : "#64748b"} fontSize={12} tickFormatter={formatHourLabel} />
-                  <YAxis yAxisId="left" stroke="#3b82f6" tickFormatter={(v) => formatCompactNumber(v)} fontSize={12} />
+                  <YAxis yAxisId="left" stroke={darkMode ? "#60a5fa" : "#3b82f6"} tickFormatter={(v) => formatCompactNumber(v)} fontSize={12} />
                   <YAxis yAxisId="right" orientation="right" stroke={darkMode ? "#94a3b8" : "#64748b"} tickFormatter={(v) => formatCompactNumber(v)} fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ borderRadius: 12, backgroundColor: "rgba(0,0,0,0.8)", border: "1px solid rgba(100,116,139,0.6)", color: "#f8fafc" }} 
-                    formatter={numericTooltipFormatter}
-                    labelFormatter={(label) => formatHourLabel(label)}
-                    itemSorter={(item) => ({ requests: 0, inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cachedTokens: 4 } as Record<string, number>)[item?.dataKey as string] ?? 999}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || !payload.length) return null;
+                      const sortedPayload = [...payload].sort((a: any, b: any) => {
+                        const order: Record<string, number> = { requests: 0, inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cachedTokens: 4 };
+                        return (order[a.dataKey] ?? 999) - (order[b.dataKey] ?? 999);
+                      });
+                      return (
+                        <div 
+                          className="rounded-xl px-4 py-3 shadow-xl backdrop-blur-sm"
+                          style={{ 
+                            backgroundColor: darkMode ? "rgba(15, 23, 42, 0.7)" : "rgba(255, 255, 255, 0.8)", 
+                            border: `1px solid ${darkMode ? "rgba(148, 163, 184, 0.4)" : "rgba(203, 213, 225, 0.6)"}`,
+                            color: darkMode ? "#f8fafc" : "#0f172a"
+                          }}
+                        >
+                          <p className={`mb-2 font-medium text-sm ${darkMode ? "text-slate-50" : "text-slate-900"}`}>{label ? formatHourLabel(String(label)) : ''}</p>
+                          <div className="space-y-1">
+                            {sortedPayload.map((entry: any, index: number) => {
+                              let color = entry.color;
+                              if (entry.name === "输入") color = darkMode ? "#fb7185" : "#e11d48";
+                              if (entry.name === "输出") color = darkMode ? "#4ade80" : "#16a34a";
+                              if (entry.name === "思考") color = darkMode ? "#fbbf24" : "#d97706";
+                              if (entry.name === "缓存") color = darkMode ? "#c084fc" : "#9333ea";
+                              if (entry.name === "请求数") color = darkMode ? "#60a5fa" : "#3b82f6";
+                              
+                              return (
+                                <div key={index} className="flex items-center gap-2 text-sm">
+                                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                                  <span style={{ color: color }} className="font-medium">
+                                    {entry.name}:
+                                  </span>
+                                  <span className={darkMode ? "text-slate-50" : "text-slate-700"}>
+                                    {formatNumberWithCommas(entry.value)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }}
                   />
                   <TrendLegend 
                     wrapperStyle={{ cursor: "pointer" }} 
                     onClick={handleHourlyLegendClick}
+                    formatter={(value: string) => {
+                      const keyMap: Record<string, string> = {
+                        "请求数": "requests",
+                        "输入": "inputTokens",
+                        "输出": "outputTokens",
+                        "思考": "reasoningTokens",
+                        "缓存": "cachedTokens"
+                      };
+                      const key = keyMap[value];
+                      const isVisible = hourlyVisible[key];
+                      
+                      if (!isVisible) {
+                        return <span style={{ color: darkMode ? "#94a3b8" : "#cbd5e1", textDecoration: "line-through" }}>{value}</span>;
+                      }
+
+                      const colors: Record<string, string> = {
+                        "请求数": darkMode ? "#60a5fa" : "#3b82f6",
+                        "输入": darkMode ? "#fb7185" : "#e11d48",
+                        "输出": darkMode ? "#4ade80" : "#16a34a",
+                        "思考": darkMode ? "#fbbf24" : "#d97706",
+                        "缓存": darkMode ? "#c084fc" : "#9333ea"
+                      };
+                      return <span style={{ color: colors[value] || "inherit", fontWeight: 500 }}>{value}</span>;
+                    }}
                     itemSorter={(item: any) => ({ requests: 0, inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cachedTokens: 4 } as Record<string, number>)[item?.dataKey] ?? 999}
                     payload={[
                       { value: "请求数", type: "line", id: "requests", color: "#3b82f6", dataKey: "requests" },
-                      { value: "输入", type: "square", id: "inputTokens", color: "#60a5fa", dataKey: "inputTokens" },
-                      { value: "输出", type: "square", id: "outputTokens", color: "#4ade80", dataKey: "outputTokens" },
-                      { value: "思考", type: "square", id: "reasoningTokens", color: "#fbbf24", dataKey: "reasoningTokens" },
-                      { value: "缓存", type: "square", id: "cachedTokens", color: "#c084fc", dataKey: "cachedTokens" },
+                      { value: "输入", type: "square", id: "inputTokens", color: "#e11d48", dataKey: "inputTokens" },
+                      { value: "输出", type: "square", id: "outputTokens", color: "#16a34a", dataKey: "outputTokens" },
+                      { value: "思考", type: "square", id: "reasoningTokens", color: "#d97706", dataKey: "reasoningTokens" },
+                      { value: "缓存", type: "square", id: "cachedTokens", color: "#9333ea", dataKey: "cachedTokens" },
                     ]}
                   />
                   {/* 堆积柱状图 - 柔和配色，仅顶部圆角，增强动画 */}
-                  <Bar hide={!hourlyVisible.inputTokens} yAxisId="right" dataKey="inputTokens" name="输入" stackId="tokens" fill="#60a5fa" animationDuration={600} />
-                  <Bar hide={!hourlyVisible.outputTokens} yAxisId="right" dataKey="outputTokens" name="输出" stackId="tokens" fill="#4ade80" animationDuration={600} />
-                  <Bar hide={!hourlyVisible.reasoningTokens} yAxisId="right" dataKey="reasoningTokens" name="思考" stackId="tokens" fill="#fbbf24" animationDuration={600} />
-                  <Bar hide={!hourlyVisible.cachedTokens} yAxisId="right" dataKey="cachedTokens" name="缓存" stackId="tokens" fill="#c084fc" radius={[4, 4, 0, 0]} animationDuration={600} />
+                  <Bar hide={!hourlyVisible.inputTokens} yAxisId="right" dataKey="inputTokens" name="输入" stackId="tokens" fill="url(#gradInput)" fillOpacity={0.8} animationDuration={600} barSize={24} />
+                  <Bar hide={!hourlyVisible.outputTokens} yAxisId="right" dataKey="outputTokens" name="输出" stackId="tokens" fill="url(#gradOutput)" fillOpacity={0.8} animationDuration={600} barSize={24} />
+                  <Bar hide={!hourlyVisible.reasoningTokens} yAxisId="right" dataKey="reasoningTokens" name="思考" stackId="tokens" fill="url(#gradReasoning)" fillOpacity={0.8} animationDuration={600} barSize={24} />
+                  <Bar hide={!hourlyVisible.cachedTokens} yAxisId="right" dataKey="cachedTokens" name="缓存" stackId="tokens" fill="url(#gradCached)" fillOpacity={0.8} radius={[4, 4, 0, 0]} animationDuration={600} barSize={24} />
                   {/* 曲线在最上层 - 带描边突出显示 */}
                   <Line 
                     hide={!hourlyVisible.requests}
@@ -1105,9 +1245,9 @@ export default function DashboardPage() {
                     type="monotone" 
                     dataKey="requests" 
                     name="请求数" 
-                    stroke="#3b82f6" 
+                    stroke={darkMode ? "#60a5fa" : "#3b82f6"} 
                     strokeWidth={3} 
-                    dot={{ r: 4, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }} 
+                    dot={{ r: 3, fill: darkMode ? "#60a5fa" : "#3b82f6", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} 
                     activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} 
                   />
                 </ComposedChart>
@@ -1266,342 +1406,460 @@ export default function DashboardPage() {
       </section>
 
       {/* 编辑价格模态框 */}
-      {editingPrice && (
-        <div 
-          className="animate-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={(e) => { if (e.target === e.currentTarget) setEditingPrice(null); }}
-        >
-          <div className={`animate-modal-content relative w-full max-w-md rounded-2xl p-6 shadow-xl ${darkMode ? "bg-slate-800" : "bg-white"}`}>
+      <Modal
+        isOpen={!!editingPrice}
+        onClose={() => setEditingPrice(null)}
+        title="编辑价格"
+        darkMode={darkMode}
+      >
+        <div className="mt-4 grid gap-3">
+          <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
+            模型名称
+            <input
+              type="text"
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
+              placeholder="模型名称"
+              value={editForm.model}
+              onChange={(e) => setEditForm((f) => ({ ...f, model: e.target.value }))}
+            />
+          </label>
+          <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
+            输入（$ / M tokens）
+            <input
+              type="number"
+              step="0.01"
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
+              value={editForm.inputPricePer1M}
+              onChange={(e) => setEditForm((f) => ({ ...f, inputPricePer1M: e.target.value }))}
+            />
+          </label>
+          <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
+            缓存输入（$ / M tokens）
+            <input
+              type="number"
+              step="0.01"
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
+              value={editForm.cachedInputPricePer1M}
+              onChange={(e) => setEditForm((f) => ({ ...f, cachedInputPricePer1M: e.target.value }))}
+            />
+          </label>
+          <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
+            输出（$ / M tokens）
+            <input
+              type="number"
+              step="0.01"
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
+              value={editForm.outputPricePer1M}
+              onChange={(e) => setEditForm((f) => ({ ...f, outputPricePer1M: e.target.value }))}
+            />
+          </label>
+          <div className="mt-2 flex gap-2">
             <button
               type="button"
               onClick={() => setEditingPrice(null)}
-              className={`absolute right-4 top-4 rounded-lg p-1 transition ${darkMode ? "text-slate-400 hover:bg-slate-700 hover:text-white" : "text-slate-500 hover:bg-slate-200 hover:text-slate-900"}`}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${darkMode ? "border-slate-600 text-slate-300 hover:bg-slate-700" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}
             >
-              <X className="h-5 w-5" />
+              取消
             </button>
-            <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>编辑价格</h3>
-            <div className="mt-4 grid gap-3">
-              <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
-                模型名称
-                <input
-                  type="text"
-                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
-                  placeholder="模型名称"
-                  value={editForm.model}
-                  onChange={(e) => setEditForm((f) => ({ ...f, model: e.target.value }))}
-                />
-              </label>
-              <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
-                输入（$ / M tokens）
-                <input
-                  type="number"
-                  step="0.01"
-                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
-                  value={editForm.inputPricePer1M}
-                  onChange={(e) => setEditForm((f) => ({ ...f, inputPricePer1M: e.target.value }))}
-                />
-              </label>
-              <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
-                缓存输入（$ / M tokens）
-                <input
-                  type="number"
-                  step="0.01"
-                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
-                  value={editForm.cachedInputPricePer1M}
-                  onChange={(e) => setEditForm((f) => ({ ...f, cachedInputPricePer1M: e.target.value }))}
-                />
-              </label>
-              <label className={`text-sm font-medium ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
-                输出（$ / M tokens）
-                <input
-                  type="number"
-                  step="0.01"
-                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none ${darkMode ? "border-slate-700 bg-slate-900 text-white placeholder-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"}`}
-                  value={editForm.outputPricePer1M}
-                  onChange={(e) => setEditForm((f) => ({ ...f, outputPricePer1M: e.target.value }))}
-                />
-              </label>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingPrice(null)}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${darkMode ? "border-slate-600 text-slate-300 hover:bg-slate-700" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEditSave}
-                  className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-                >
-                  保存
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 删除价格确认模态框 */}
-      {pendingDelete && (
-        <div
-          className="animate-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setPendingDelete(null);
-          }}
-        >
-          <div className={`animate-modal-content relative w-full max-w-md rounded-2xl p-6 shadow-xl ${darkMode ? "bg-slate-800" : "bg-white"}`}>
-            <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>确认删除</h3>
-            <p className={`mt-2 text-sm ${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-              删除模型 {pendingDelete} 的价格配置？此操作不可恢复。
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingDelete(null)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${darkMode ? "border-slate-600 text-slate-300 hover:bg-slate-700" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={confirmDeletePrice}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
-              >
-                确认删除
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 全屏图表模态框 */}
-      {fullscreenChart && (
-        <div 
-          className="animate-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6"
-          onClick={(e) => { if (e.target === e.currentTarget) setFullscreenChart(null); }}
-        >
-          <div className={`animate-modal-content relative w-full max-w-6xl rounded-2xl p-6 shadow-xl ${darkMode ? "bg-slate-800" : "bg-white"}`}>
             <button
               type="button"
-              onClick={() => setFullscreenChart(null)}
-              className={`absolute right-4 top-4 rounded-lg p-1 transition ${darkMode ? "text-slate-400 hover:bg-slate-700 hover:text-white" : "text-slate-500 hover:bg-slate-200 hover:text-slate-900"}`}
+              onClick={handleEditSave}
+              className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
             >
-              <X className="h-5 w-5" />
+              保存
             </button>
-            <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>
-              {fullscreenChart === "trend" && "每日请求与 Token 趋势"}
-              {fullscreenChart === "pie" && "模型用量分布"}
-              {fullscreenChart === "stacked" && "每小时负载分布"}
-            </h3>
-            <div className="mt-4 h-[70vh]">
-              {fullscreenChart === "trend" && overviewData && (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={overviewData.byDay} margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
-                    <CartesianGrid stroke="#334155" strokeDasharray="5 5" />
-                    <XAxis dataKey="label" stroke="#94a3b8" fontSize={12} />
-                    <YAxis 
-                      yAxisId="left" 
-                      stroke={trendConfig.leftAxis.color} 
-                      tickFormatter={trendConfig.leftAxis.formatter} 
-                      fontSize={12} 
-                    />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      stroke={trendConfig.rightAxis.color}
-                      tickFormatter={trendConfig.rightAxis.formatter}
-                      fontSize={12}
-                      hide={!trendConfig.rightAxisVisible}
-                    />
-                    <YAxis
-                      yAxisId="cost"
-                      orientation="right"
-                      stroke="#fbbf24"
-                      tickFormatter={(v) => formatCurrency(v)}
-                      fontSize={12}
-                      hide={trendConfig.lineAxisMap.cost !== 'cost'}
-                    />
-                    <Tooltip
-                      contentStyle={{ borderRadius: 12, backgroundColor: "rgba(0,0,0,0.8)", border: "1px solid rgba(100,116,139,0.6)", color: "#f8fafc" }}
-                      formatter={trendTooltipFormatter}
-                    />
-                    <TrendLegend 
-                      height={24} 
-                      iconSize={10} 
-                      wrapperStyle={{ paddingTop: 0, paddingBottom: 0, lineHeight: "24px", cursor: "pointer" }} 
-                      onClick={handleTrendLegendClick}
-                      itemSorter={(item: any) => ({ requests: 0, tokens: 1, cost: 2 } as Record<string, number>)[item?.dataKey] ?? 999}
-                    />
-                    <Line hide={!trendVisible.requests} yAxisId={trendConfig.lineAxisMap.requests} type="monotone" dataKey="requests" stroke="#3b82f6" strokeWidth={2} name="请求数" dot={{ r: 3 }} />
-                    <Line hide={!trendVisible.tokens} yAxisId={trendConfig.lineAxisMap.tokens} type="monotone" dataKey="tokens" stroke="#10b981" strokeWidth={2} name="Tokens" dot={{ r: 3 }} />
-                    <Line hide={!trendVisible.cost} yAxisId={trendConfig.lineAxisMap.cost} type="monotone" dataKey="cost" stroke="#fbbf24" strokeWidth={2} name="费用" dot={{ r: 3 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-              {fullscreenChart === "pie" && overviewData && overviewData.models.length > 0 && (
-                <div className="flex gap-6 h-full">
-                  {/* 饼图 */}
-                  <div
-                    ref={pieChartFullscreenContainerRef}
-                    className="flex-1"
-                    onPointerLeave={() => {
-                      cancelPieLegendClear();
-                      setPieTooltipOpen(false);
-                      setHoveredPieIndex(null);
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                        <Pie
-                          data={overviewData.models}
-                          dataKey={pieMode}
-                          nameKey="model"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius="75%"
-                          innerRadius="40%"
-                          animationDuration={300}
-                          onMouseEnter={(_, index) => {
-                            setHoveredPieIndex(index);
-                            setPieTooltipOpen(true);
-                          }}
-                          onMouseLeave={() => {
-                            setHoveredPieIndex(null);
-                            setPieTooltipOpen(false);
-                          }}
-                        >
-                          {overviewData.models.map((_, index) => (
-                            <Cell 
-                              key={`cell-fs-${index}`} 
-                              fill={PIE_COLORS[index % PIE_COLORS.length]}
-                              fillOpacity={hoveredPieIndex === null || hoveredPieIndex === index ? 1 : 0.3}
-                              style={{ transition: 'fill-opacity 0.2s' }}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          position={{ x: 0, y: 0 }}
-                          wrapperStyle={{ zIndex: 1000, pointerEvents: "none" }}
-                          content={({ active, payload }) => {
-                            if (!pieTooltipOpen || hoveredPieIndex === null) return null;
-                            if (!active || !payload || !payload[0]) return null;
-                            const data = payload[0].payload;
-                            return (
-                              <div
-                                className="rounded-xl px-3 py-2 text-sm shadow-lg"
-                                style={{ backgroundColor: "rgba(0,0,0,0.8)", border: "1px solid rgba(100,116,139,0.6)", color: "#f8fafc" }}
-                              >
-                                <p className="font-semibold text-slate-50">{data.model}</p>
-                                <p className="text-blue-300">{formatNumberWithCommas(data.requests)} 请求数</p>
-                                <p className="text-emerald-300">{formatNumberWithCommas(data.tokens)} tokens</p>
-                              </div>
-                            );
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* 自定义图例 */}
-                  <div className="w-80 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                    {[...overviewData.models]
-                      .sort((a, b) => b[pieMode] - a[pieMode])
-                      .map((item) => {
-                        const originalIndex = overviewData.models.findIndex(m => m.model === item.model);
-                        const total = overviewData.models.reduce((sum, m) => sum + m[pieMode], 0);
-                        const percent = total > 0 ? (item[pieMode] / total) * 100 : 0;
-                        const isHighlighted = hoveredPieIndex === null || hoveredPieIndex === originalIndex;
-                        return (
-                          <div 
-                            key={item.model} 
-                            className={`rounded-lg p-3 transition cursor-pointer ${
-                              isHighlighted 
-                                ? darkMode ? "bg-slate-700/30" : "bg-slate-100" 
-                                : "opacity-40"
-                            } ${darkMode ? "hover:bg-slate-700/50" : "hover:bg-slate-200"}`}
-                            onMouseEnter={() => {
-                              cancelPieLegendClear();
-                              setHoveredPieIndex(originalIndex);
-                            }}
-                            onMouseLeave={() => {
-                              schedulePieLegendClear();
-                            }}
-                            style={{ transition: 'all 0.2s' }}
-                          >
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <div 
-                                className={`w-4 h-4 rounded-full flex-shrink-0 transition-all duration-200 ${
-                                  isHighlighted && hoveredPieIndex === originalIndex ? 'ring-2 ring-offset-1' : ''
-                                }`}
-                                style={{ 
-                                  backgroundColor: PIE_COLORS[originalIndex % PIE_COLORS.length],
-                                  '--tw-ring-color': isHighlighted && hoveredPieIndex === originalIndex ? PIE_COLORS[originalIndex % PIE_COLORS.length] : 'transparent',
-                                  transform: isHighlighted && hoveredPieIndex === originalIndex ? 'scale(1.2)' : 'scale(1)'
-                                } as React.CSSProperties}
-                              />
-                              <p className={`text-base font-medium truncate flex-1 ${darkMode ? "text-slate-200" : "text-slate-800"}`} title={item.model}>
-                                {item.model}
-                              </p>
-                            </div>
-                            <div className={`text-sm ${darkMode ? "text-slate-400" : "text-slate-600"} ml-6`}>
-                              <span className="font-semibold">{percent.toFixed(1)}%</span>
-                              <span className="mx-1.5">·</span>
-                              <span>{pieMode === "tokens" ? formatCompactNumber(item.tokens) : formatNumberWithCommas(item.requests)} {pieMode === "tokens" ? "tokens" : "次"}</span>
-                            </div>
-                          </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {fullscreenChart === "stacked" && overviewData && (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={hourlySeries} margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#334155" : "#e2e8f0"} />
-                    <XAxis dataKey="label" stroke={darkMode ? "#94a3b8" : "#64748b"} fontSize={12} tickFormatter={formatHourLabel} />
-                    <YAxis yAxisId="left" stroke="#3b82f6" tickFormatter={(v) => formatCompactNumber(v)} fontSize={12} />
-                    <YAxis yAxisId="right" orientation="right" stroke={darkMode ? "#94a3b8" : "#64748b"} tickFormatter={(v) => formatCompactNumber(v)} fontSize={12} />
-                    <Tooltip 
-                      contentStyle={{ borderRadius: 12, backgroundColor: "rgba(0,0,0,0.8)", border: "1px solid rgba(100,116,139,0.6)", color: "#f8fafc" }} 
-                      formatter={numericTooltipFormatter}
-                      labelFormatter={(label) => formatHourLabel(label)}
-                    />
-                    <TrendLegend 
-                      wrapperStyle={{ cursor: "pointer" }} 
-                      onClick={handleHourlyLegendClick}
-                      itemSorter={(item: any) => ({ requests: 0, inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cachedTokens: 4 } as Record<string, number>)[item?.dataKey] ?? 999}
-                      payload={[
-                        { value: "请求数", type: "line", id: "requests", color: "#3b82f6", dataKey: "requests" },
-                        { value: "输入", type: "square", id: "inputTokens", color: "#60a5fa", dataKey: "inputTokens" },
-                        { value: "输出", type: "square", id: "outputTokens", color: "#4ade80", dataKey: "outputTokens" },
-                        { value: "思考", type: "square", id: "reasoningTokens", color: "#fbbf24", dataKey: "reasoningTokens" },
-                        { value: "缓存", type: "square", id: "cachedTokens", color: "#c084fc", dataKey: "cachedTokens" },
-                      ]}
-                    />
-                    {/* 堆积柱状图 - 柔和配色，仅顶部圆角，增强动画 */}
-                    <Bar hide={!hourlyVisible.inputTokens} yAxisId="right" dataKey="inputTokens" name="输入" stackId="tokens" fill="#60a5fa" animationDuration={600} />
-                    <Bar hide={!hourlyVisible.outputTokens} yAxisId="right" dataKey="outputTokens" name="输出" stackId="tokens" fill="#4ade80" animationDuration={600} />
-                    <Bar hide={!hourlyVisible.reasoningTokens} yAxisId="right" dataKey="reasoningTokens" name="思考" stackId="tokens" fill="#fbbf24" animationDuration={600} />
-                    <Bar hide={!hourlyVisible.cachedTokens} yAxisId="right" dataKey="cachedTokens" name="缓存" stackId="tokens" fill="#c084fc" animationDuration={600} />
-                    {/* 曲线在最上层 - 带描边突出显示 */}
-                    <Line 
-                      hide={!hourlyVisible.requests}
-                      yAxisId="left" 
-                      type="monotone" 
-                      dataKey="requests" 
-                      name="请求数" 
-                      stroke="#3b82f6" 
-                      strokeWidth={3} 
-                      dot={{ r: 4, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }} 
-                      activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} 
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </div>
           </div>
         </div>
-      )}
+      </Modal>
+
+      {/* 删除价格确认模态框 */}
+      <Modal
+        isOpen={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title="确认删除"
+        darkMode={darkMode}
+      >
+        <p className={`mt-2 text-sm ${darkMode ? "text-slate-300" : "text-slate-600"}`}>
+          删除模型 {pendingDelete} 的价格配置？此操作不可恢复。
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPendingDelete(null)}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${darkMode ? "border-slate-600 text-slate-300 hover:bg-slate-700" : "border-slate-300 text-slate-700 hover:bg-slate-100"}`}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={confirmDeletePrice}
+            className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
+          >
+            确认删除
+          </button>
+        </div>
+      </Modal>
+
+      {/* 全屏图表模态框 */}
+      <Modal
+        isOpen={!!fullscreenChart}
+        onClose={() => setFullscreenChart(null)}
+        title={
+          fullscreenChart === "trend" ? "每日请求与 Token 趋势" :
+          fullscreenChart === "pie" ? "模型用量分布" :
+          fullscreenChart === "stacked" ? "每小时负载分布" : ""
+        }
+        darkMode={darkMode}
+        className="max-w-6xl"
+        backdropClassName="bg-black/70"
+      >
+        <div className="mt-4 h-[70vh]">
+          {fullscreenChart === "trend" && overviewData && (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={overviewData.byDay} margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#334155" strokeDasharray="5 5" />
+                <XAxis dataKey="label" stroke="#94a3b8" fontSize={12} />
+                <YAxis 
+                  yAxisId="left" 
+                  stroke={trendConfig.leftAxis.color} 
+                  tickFormatter={trendConfig.leftAxis.formatter} 
+                  fontSize={12} 
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke={trendConfig.rightAxis.color}
+                  tickFormatter={trendConfig.rightAxis.formatter}
+                  fontSize={12}
+                  hide={!trendConfig.rightAxisVisible}
+                />
+                <YAxis
+                  yAxisId="cost"
+                  orientation="right"
+                  stroke="#fbbf24"
+                  tickFormatter={(v) => formatCurrency(v)}
+                  fontSize={12}
+                  hide={trendConfig.lineAxisMap.cost !== 'cost'}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || !payload.length) return null;
+                    const sortedPayload = [...payload].sort((a: any, b: any) => {
+                      const order: Record<string, number> = { requests: 0, tokens: 1, cost: 2 };
+                      return (order[a.dataKey] ?? 999) - (order[b.dataKey] ?? 999);
+                    });
+                    return (
+                      <div 
+                        className="rounded-xl px-4 py-3 shadow-xl backdrop-blur-sm"
+                        style={{ 
+                          backgroundColor: darkMode ? "rgba(15, 23, 42, 0.7)" : "rgba(255, 255, 255, 0.8)", 
+                          border: `1px solid ${darkMode ? "rgba(148, 163, 184, 0.4)" : "rgba(203, 213, 225, 0.6)"}`,
+                          color: darkMode ? "#f8fafc" : "#0f172a"
+                        }}
+                      >
+                        <p className={`mb-2 font-medium text-sm ${darkMode ? "text-slate-50" : "text-slate-900"}`}>{label}</p>
+                        <div className="space-y-1">
+                          {sortedPayload.map((entry: any, index: number) => {
+                            let color = entry.color;
+                            if (entry.name === "请求数") color = darkMode ? "#60a5fa" : "#3b82f6";
+                            if (entry.name === "Tokens") color = "#10b981";
+                            if (entry.name === "费用") color = "#fbbf24";
+                            
+                            const value = entry.name === "费用" ? formatCurrency(entry.value) : formatNumberWithCommas(entry.value);
+                            
+                            return (
+                              <div key={index} className="flex items-center gap-2 text-sm">
+                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                                <span style={{ color: color }} className="font-medium">
+                                  {entry.name}:
+                                </span>
+                                <span className={darkMode ? "text-slate-50" : "text-slate-700"}>
+                                  {value}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <TrendLegend 
+                  height={24} 
+                  iconSize={10} 
+                  wrapperStyle={{ paddingTop: 0, paddingBottom: 0, lineHeight: "24px", cursor: "pointer" }} 
+                  onClick={handleTrendLegendClick}
+                  formatter={(value: string) => {
+                    const keyMap: Record<string, string> = { "请求数": "requests", "Tokens": "tokens", "费用": "cost" };
+                    const key = keyMap[value];
+                    const isVisible = trendVisible[key];
+                    if (!isVisible) {
+                      return <span style={{ color: darkMode ? "#94a3b8" : "#cbd5e1", textDecoration: "line-through" }}>{value}</span>;
+                    }
+                    const colors: Record<string, string> = { "请求数": darkMode ? "#60a5fa" : "#3b82f6", "Tokens": "#10b981", "费用": "#fbbf24" };
+                    return <span style={{ color: colors[value] || "inherit", fontWeight: 500 }}>{value}</span>;
+                  }}
+                  itemSorter={(item: any) => ({ requests: 0, tokens: 1, cost: 2 } as Record<string, number>)[item?.dataKey] ?? 999}
+                />
+                <Line hide={!trendVisible.requests} yAxisId={trendConfig.lineAxisMap.requests} type="monotone" dataKey="requests" stroke={darkMode ? "#60a5fa" : "#3b82f6"} strokeWidth={2} name="请求数" dot={{ r: 3, fill: darkMode ? "#60a5fa" : "#3b82f6", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} />
+                <Line hide={!trendVisible.tokens} yAxisId={trendConfig.lineAxisMap.tokens} type="monotone" dataKey="tokens" stroke="#10b981" strokeWidth={2} name="Tokens" dot={{ r: 3, fill: "#10b981", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} />
+                <Line hide={!trendVisible.cost} yAxisId={trendConfig.lineAxisMap.cost} type="monotone" dataKey="cost" stroke="#fbbf24" strokeWidth={2} name="费用" dot={{ r: 3, fill: "#fbbf24", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+          {fullscreenChart === "pie" && overviewData && overviewData.models.length > 0 && (
+            <div className="flex gap-6 h-full">
+              {/* 饼图 */}
+              <div
+                ref={pieChartFullscreenContainerRef}
+                className="flex-1"
+                onPointerLeave={() => {
+                  cancelPieLegendClear();
+                  setPieTooltipOpen(false);
+                  setHoveredPieIndex(null);
+                }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <Pie
+                      data={overviewData.models}
+                      dataKey={pieMode}
+                      nameKey="model"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius="75%"
+                      innerRadius="40%"
+                      animationDuration={300}
+                      onMouseEnter={(_, index) => {
+                        setHoveredPieIndex(index);
+                        setPieTooltipOpen(true);
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredPieIndex(null);
+                        setPieTooltipOpen(false);
+                      }}
+                    >
+                      {overviewData.models.map((_, index) => (
+                        <Cell 
+                          key={`cell-fs-${index}`} 
+                          fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          fillOpacity={hoveredPieIndex === null || hoveredPieIndex === index ? 1 : 0.3}
+                          style={{ transition: 'fill-opacity 0.2s' }}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      position={{ x: 0, y: 0 }}
+                      wrapperStyle={{ zIndex: 1000, pointerEvents: "none" }}
+                      content={({ active, payload }) => {
+                        if (!pieTooltipOpen || hoveredPieIndex === null) return null;
+                        if (!active || !payload || !payload[0]) return null;
+                        const data = payload[0].payload;
+                        return (
+                          <div
+                            className="rounded-xl px-4 py-3 shadow-xl backdrop-blur-sm"
+                            style={{ 
+                              backgroundColor: darkMode ? "rgba(15, 23, 42, 0.7)" : "rgba(255, 255, 255, 0.8)", 
+                              border: `1px solid ${darkMode ? "rgba(148, 163, 184, 0.4)" : "rgba(203, 213, 225, 0.6)"}`,
+                              color: darkMode ? "#f8fafc" : "#0f172a"
+                            }}
+                          >
+                            <p className={`mb-2 font-medium text-sm ${darkMode ? "text-slate-50" : "text-slate-900"}`}>{data.model}</p>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-blue-400 font-medium">请求数:</span>
+                                <span className={darkMode ? "text-slate-50" : "text-slate-700"}>{formatNumberWithCommas(data.requests)}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-emerald-400 font-medium">Tokens:</span>
+                                <span className={darkMode ? "text-slate-50" : "text-slate-700"}>{formatNumberWithCommas(data.tokens)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              {/* 自定义图例 */}
+              <div className="w-80 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                {[...overviewData.models]
+                  .sort((a, b) => b[pieMode] - a[pieMode])
+                  .map((item) => {
+                    const originalIndex = overviewData.models.findIndex(m => m.model === item.model);
+                    const total = overviewData.models.reduce((sum, m) => sum + m[pieMode], 0);
+                    const percent = total > 0 ? (item[pieMode] / total) * 100 : 0;
+                    const isHighlighted = hoveredPieIndex === null || hoveredPieIndex === originalIndex;
+                    return (
+                      <div 
+                        key={item.model} 
+                        className={`rounded-lg p-3 transition cursor-pointer ${
+                          isHighlighted 
+                            ? darkMode ? "bg-slate-700/30" : "bg-slate-100" 
+                            : "opacity-40"
+                        } ${darkMode ? "hover:bg-slate-700/50" : "hover:bg-slate-200"}`}
+                        onMouseEnter={() => {
+                          cancelPieLegendClear();
+                          setHoveredPieIndex(originalIndex);
+                        }}
+                        onMouseLeave={() => {
+                          schedulePieLegendClear();
+                        }}
+                        style={{ transition: 'all 0.2s' }}
+                      >
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div 
+                            className={`w-4 h-4 rounded-full flex-shrink-0 transition-all duration-200 ${
+                              isHighlighted && hoveredPieIndex === originalIndex ? 'ring-2 ring-offset-1' : ''
+                            }`}
+                            style={{ 
+                              backgroundColor: PIE_COLORS[originalIndex % PIE_COLORS.length],
+                              '--tw-ring-color': isHighlighted && hoveredPieIndex === originalIndex ? PIE_COLORS[originalIndex % PIE_COLORS.length] : 'transparent',
+                              transform: isHighlighted && hoveredPieIndex === originalIndex ? 'scale(1.2)' : 'scale(1)'
+                            } as React.CSSProperties}
+                          />
+                          <p className={`text-base font-medium truncate flex-1 ${darkMode ? "text-slate-200" : "text-slate-800"}`} title={item.model}>
+                            {item.model}
+                          </p>
+                        </div>
+                        <div className={`text-sm ${darkMode ? "text-slate-400" : "text-slate-600"} ml-6`}>
+                          <span className="font-semibold">{percent.toFixed(1)}%</span>
+                          <span className="mx-1.5">·</span>
+                          <span>{pieMode === "tokens" ? formatCompactNumber(item.tokens) : formatNumberWithCommas(item.requests)} {pieMode === "tokens" ? "tokens" : "次"}</span>
+                        </div>
+                      </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {fullscreenChart === "stacked" && overviewData && (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={hourlySeries} margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradInputFS" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fca5a5" />
+                    <stop offset="100%" stopColor="#f87171" />
+                  </linearGradient>
+                  <linearGradient id="gradOutputFS" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#86efac" />
+                    <stop offset="100%" stopColor="#4ade80" />
+                  </linearGradient>
+                  <linearGradient id="gradReasoningFS" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fcd34d" />
+                    <stop offset="100%" stopColor="#fbbf24" />
+                  </linearGradient>
+                  <linearGradient id="gradCachedFS" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#d8b4fe" />
+                    <stop offset="100%" stopColor="#c084fc" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#334155" : "#e2e8f0"} />
+                <XAxis dataKey="label" stroke={darkMode ? "#94a3b8" : "#64748b"} fontSize={12} tickFormatter={formatHourLabel} />
+                <YAxis yAxisId="left" stroke={darkMode ? "#60a5fa" : "#3b82f6"} tickFormatter={(v) => formatCompactNumber(v)} fontSize={12} />
+                <YAxis yAxisId="right" orientation="right" stroke={darkMode ? "#94a3b8" : "#64748b"} tickFormatter={(v) => formatCompactNumber(v)} fontSize={12} />
+                <Tooltip 
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || !payload.length) return null;
+                    const sortedPayload = [...payload].sort((a: any, b: any) => {
+                      const order: Record<string, number> = { requests: 0, inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cachedTokens: 4 };
+                      return (order[a.dataKey] ?? 999) - (order[b.dataKey] ?? 999);
+                    });
+                    return (
+                      <div 
+                        className="rounded-xl px-4 py-3 shadow-xl backdrop-blur-sm"
+                        style={{ 
+                          backgroundColor: darkMode ? "rgba(15, 23, 42, 0.7)" : "rgba(255, 255, 255, 0.8)", 
+                          border: `1px solid ${darkMode ? "rgba(148, 163, 184, 0.4)" : "rgba(203, 213, 225, 0.6)"}`,
+                          color: darkMode ? "#f8fafc" : "#0f172a"
+                        }}
+                      >
+                        <p className={`mb-2 font-medium text-sm ${darkMode ? "text-slate-50" : "text-slate-900"}`}>{label ? formatHourLabel(String(label)) : ''}</p>
+                        <div className="space-y-1">
+                          {sortedPayload.map((entry: any, index: number) => {
+                            let color = entry.color;
+                            if (entry.name === "输入") color = darkMode ? "#fb7185" : "#e11d48";
+                            if (entry.name === "输出") color = darkMode ? "#4ade80" : "#16a34a";
+                            if (entry.name === "思考") color = darkMode ? "#fbbf24" : "#d97706";
+                            if (entry.name === "缓存") color = darkMode ? "#c084fc" : "#9333ea";
+                            if (entry.name === "请求数") color = darkMode ? "#60a5fa" : "#3b82f6";
+                            
+                            return (
+                              <div key={index} className="flex items-center gap-2 text-sm">
+                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                                <span style={{ color: color }} className="font-medium">
+                                  {entry.name}:
+                                </span>
+                                <span className={darkMode ? "text-slate-50" : "text-slate-700"}>
+                                  {formatNumberWithCommas(entry.value)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <TrendLegend 
+                  wrapperStyle={{ cursor: "pointer" }} 
+                  onClick={handleHourlyLegendClick}
+                  formatter={(value: string) => {
+                    const keyMap: Record<string, string> = {
+                      "请求数": "requests",
+                      "输入": "inputTokens",
+                      "输出": "outputTokens",
+                      "思考": "reasoningTokens",
+                      "缓存": "cachedTokens"
+                    };
+                    const key = keyMap[value];
+                    const isVisible = hourlyVisible[key];
+                    
+                    if (!isVisible) {
+                      return <span style={{ color: darkMode ? "#94a3b8" : "#cbd5e1", textDecoration: "line-through" }}>{value}</span>;
+                    }
+
+                    const colors: Record<string, string> = {
+                      "请求数": darkMode ? "#60a5fa" : "#3b82f6",
+                      "输入": darkMode ? "#fb7185" : "#e11d48",
+                      "输出": darkMode ? "#4ade80" : "#16a34a",
+                      "思考": darkMode ? "#fbbf24" : "#d97706",
+                      "缓存": darkMode ? "#c084fc" : "#9333ea"
+                    };
+                    return <span style={{ color: colors[value] || "inherit", fontWeight: 500 }}>{value}</span>;
+                  }}
+                  itemSorter={(item: any) => ({ requests: 0, inputTokens: 1, outputTokens: 2, reasoningTokens: 3, cachedTokens: 4 } as Record<string, number>)[item?.dataKey] ?? 999}
+                  payload={[
+                    { value: "请求数", type: "line", id: "requests", color: "#3b82f6", dataKey: "requests" },
+                    { value: "输入", type: "square", id: "inputTokens", color: "#e11d48", dataKey: "inputTokens" },
+                    { value: "输出", type: "square", id: "outputTokens", color: "#16a34a", dataKey: "outputTokens" },
+                    { value: "思考", type: "square", id: "reasoningTokens", color: "#d97706", dataKey: "reasoningTokens" },
+                    { value: "缓存", type: "square", id: "cachedTokens", color: "#9333ea", dataKey: "cachedTokens" },
+                  ]}
+                />
+                {/* 堆积柱状图 - 柔和配色，仅顶部圆角，增强动画 */}
+                <Bar hide={!hourlyVisible.inputTokens} yAxisId="right" dataKey="inputTokens" name="输入" stackId="tokens" fill="url(#gradInputFS)" fillOpacity={0.8} animationDuration={600} barSize={32} />
+                <Bar hide={!hourlyVisible.outputTokens} yAxisId="right" dataKey="outputTokens" name="输出" stackId="tokens" fill="url(#gradOutputFS)" fillOpacity={0.8} animationDuration={600} barSize={32} />
+                <Bar hide={!hourlyVisible.reasoningTokens} yAxisId="right" dataKey="reasoningTokens" name="思考" stackId="tokens" fill="url(#gradReasoningFS)" fillOpacity={0.8} animationDuration={600} barSize={32} />
+                <Bar hide={!hourlyVisible.cachedTokens} yAxisId="right" dataKey="cachedTokens" name="缓存" stackId="tokens" fill="url(#gradCachedFS)" fillOpacity={0.8} animationDuration={600} barSize={32} />
+                {/* 曲线在最上层 - 带描边突出显示 */}
+                <Line 
+                  hide={!hourlyVisible.requests}
+                  yAxisId="left" 
+                  type="monotone" 
+                  dataKey="requests" 
+                  name="请求数" 
+                  stroke={darkMode ? "#60a5fa" : "#3b82f6"} 
+                  strokeWidth={3} 
+                  dot={{ r: 3, fill: darkMode ? "#60a5fa" : "#3b82f6", stroke: "#fff", strokeWidth: 1, fillOpacity: 0.2 }} 
+                  activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }} 
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </Modal>
     </main>
   );
 }

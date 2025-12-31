@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, FileText, Activity, LogOut, Github, ExternalLink } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import { Modal } from "./Modal";
 
 const links = [
   { href: "/", label: "仪表盘", icon: BarChart3 },
@@ -173,39 +174,36 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-      {showUsageConfirm ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowUsageConfirm(false);
-          }}
-        >
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 p-5 shadow-xl ring-1 ring-slate-700">
-            <h3 className="text-lg font-semibold text-white">关闭用量数据收集？</h3>
-            <p className="mt-2 text-sm text-slate-400">关闭后将停止记录使用数据，需要时可再次开启。</p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowUsageConfirm(false)}
-                className="flex-1 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUsageConfirm(false);
-                  applyUsageToggle(false);
-                }}
-                className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
-                disabled={usageStatsLoading}
-              >
-                确认关闭
-              </button>
-            </div>
-          </div>
+      <Modal
+        isOpen={showUsageConfirm}
+        onClose={() => setShowUsageConfirm(false)}
+        title="关闭用量数据收集？"
+        darkMode={true}
+        className="bg-slate-900 ring-1 ring-slate-700"
+        backdropClassName="bg-black/60"
+      >
+        <p className="mt-2 text-sm text-slate-400">关闭后将停止记录使用数据，需要时可再次开启。</p>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setShowUsageConfirm(false)}
+            className="flex-1 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowUsageConfirm(false);
+              applyUsageToggle(false);
+            }}
+            className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
+            disabled={usageStatsLoading}
+          >
+            确认关闭
+          </button>
         </div>
-      ) : null}
+      </Modal>
     </aside>
   );
 }
