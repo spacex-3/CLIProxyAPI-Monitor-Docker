@@ -868,7 +868,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 模型用量饼图 */}
-        <div className={`rounded-2xl p-6 shadow-sm ring-1 lg:col-span-2 ${darkMode ? "bg-slate-800/50 ring-slate-700" : "bg-white ring-slate-200"}`}>
+        <div className={`rounded-2xl p-6 shadow-sm ring-1 lg:col-span-2 flex flex-col ${darkMode ? "bg-slate-800/50 ring-slate-700" : "bg-white ring-slate-200"}`}>
           <div className="flex items-center justify-between">
             <h2 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>模型用量分布</h2>
             <div className="flex items-center gap-2">
@@ -896,9 +896,9 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-          <div className="mt-2 flex gap-4 h-72">
+          <div className="mt-4 flex-1 flex gap-4 min-h-64">
             {loadingOverview ? (
-              <Skeleton className="flex-1 rounded-xl" />
+              <Skeleton className="h-full w-full rounded-xl" />
             ) : showEmpty || !overviewData || overviewData.models.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-800/30 text-center">
                 <p className="text-base text-slate-400">暂无模型数据</p>
@@ -1025,7 +1025,7 @@ export default function DashboardPage() {
       {/* 第二行：每小时负载 + 模型费用 */}
       <section className="mt-6 grid gap-6 lg:grid-cols-5">
         {/* 每小时负载分布 */}
-        <div className={`rounded-2xl p-6 shadow-sm ring-1 lg:col-span-3 ${darkMode ? "bg-slate-800/50 ring-slate-700" : "bg-white ring-slate-200"}`}>
+        <div className={`rounded-2xl p-6 shadow-sm ring-1 lg:col-span-3 flex flex-col ${darkMode ? "bg-slate-800/50 ring-slate-700" : "bg-white ring-slate-200"}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h2 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>每小时负载分布</h2>
@@ -1060,11 +1060,11 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-          <div className="mt-4 h-64">
+          <div className="mt-4 flex-1 min-h-64">
             {loadingOverview ? (
               <Skeleton className="h-full rounded-xl" />
             ) : !overviewData || showEmpty ? (
-              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-600 bg-slate-800/25 text-center">
+              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-800/30 text-center">
                 <p className="text-base text-slate-400">暂无小时数据</p>
                 <p className="mt-1 text-sm text-slate-500">请先触发 /api/sync 同步数据</p>
               </div>
@@ -1122,7 +1122,7 @@ export default function DashboardPage() {
             <h2 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>预估模型费用</h2>
             <span className={`text-xs ${darkMode ? "text-slate-400" : "text-slate-500"}`}>基于配置的价格</span>
           </div>
-          <div className="scrollbar-slim mt-3 max-h-64 min-h-[14rem] space-y-2 overflow-y-auto">
+          <div className="scrollbar-slim mt-3 max-h-80 min-h-[14rem] space-y-2 overflow-y-auto">
             {loadingOverview ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <div key={`model-skel-${i}`} className="rounded-xl">
@@ -1225,7 +1225,7 @@ export default function DashboardPage() {
           </form>
 
           <div className="lg:col-span-3">
-            <div className="scrollbar-slim grid max-h-[520px] gap-3 overflow-y-auto pr-1">
+            <div className="scrollbar-slim grid max-h-[400px] gap-3 overflow-y-auto pr-1">
               {prices.length ? prices.map((price) => (
                 <div key={price.model} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${darkMode ? "border-slate-700 bg-slate-800/50" : "border-slate-200 bg-slate-50"}`}>
                   <div>
