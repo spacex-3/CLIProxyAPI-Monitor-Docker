@@ -4,7 +4,7 @@ import Sidebar from "./components/Sidebar";
 import ClientLayout from "./components/ClientLayout";
 
 export const metadata: Metadata = {
-  title: "CLIProxy Usage Dashboard",
+  title: "CLIProxyAPI Usage Dashboard",
   description: "Usage analytics and cost tracking for CLIProxy API"
 };
 

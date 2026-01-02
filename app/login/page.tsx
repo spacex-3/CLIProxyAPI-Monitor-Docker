@@ -161,7 +161,7 @@ function LoginPageContent() {
 
         {/* 底部提示 */}
         <p className="text-center text-slate-500 text-sm mt-6">
-          © 2025 CLIProxy Usage Dashboard
+          © 2025 CLIProxyAPI Monitor
         </p>
       </div>
     </div>

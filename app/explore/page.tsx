@@ -189,36 +189,56 @@ function formatTs(ms: number) {
   return timeFormatter.format(d);
 }
 
-function useLerpYDomain(targetDomain: [number, number] | undefined, factor = 0.15, enabled = true): [number, number] | undefined {
+function useLerpYDomain(
+  targetDomain: [number, number] | undefined,
+  factor = 0.15,
+  enabled = true
+): [number, number] | undefined {
   const [currentDomain, setCurrentDomain] = useState(targetDomain);
   const targetRef = useRef(targetDomain);
   const animationRef = useRef<number>();
-  const enabledRef = useRef(enabled);
+  const startTimeRef = useRef<number | null>(null);
+  const frameRef = useRef(0);
 
   useEffect(() => {
     targetRef.current = targetDomain;
   }, [targetDomain]);
 
   useEffect(() => {
-    enabledRef.current = enabled;
-  }, [enabled]);
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
 
-  useEffect(() => {
-    // 如果禁用动画，直接设置为目标值
-    if (!enabled && targetDomain) {
+    // 无目标或禁用动画时直接同步
+    if (!targetDomain || !enabled) {
       setCurrentDomain(targetDomain);
       return;
     }
 
-    const animate = () => {
+    // 单一路径：提高帧数保证平滑，同时限定总时长避免拖沓
+    const stepFactor = factor;
+    const maxFrames = 60;
+    const maxDuration = 1000; // ms
+    const snapThreshold = 1; // token 差值小于阈值直接吸附
+
+    startTimeRef.current = null;
+    frameRef.current = 0;
+
+    const animate = (timestamp: number) => {
+      if (startTimeRef.current == null) startTimeRef.current = timestamp;
+      const elapsed = timestamp - startTimeRef.current;
+      let shouldContinue = true;
+
       setCurrentDomain(prev => {
         const target = targetRef.current;
-        
-        if (!target) return undefined;
-        if (!prev) return target;
-        
-        // 运行时检查是否禁用动画
-        if (!enabledRef.current) return target;
+        if (!target) {
+          shouldContinue = false;
+          return undefined;
+        }
+        if (!prev) {
+          shouldContinue = false;
+          return target;
+        }
 
         const [currentMin, currentMax] = prev;
         const [targetMin, targetMax] = target;
@@ -226,19 +246,26 @@ function useLerpYDomain(targetDomain: [number, number] | undefined, factor = 0.1
         const diffMin = targetMin - currentMin;
         const diffMax = targetMax - currentMax;
 
-        // 阈值：小于 1 token 时直接吸附
-        if (Math.abs(diffMin) < 1 && Math.abs(diffMax) < 1) {
-          if (currentMin !== targetMin || currentMax !== targetMax) {
-            return target;
-          }
-          return prev;
+        const snapMin = Math.abs(diffMin) <= snapThreshold;
+        const snapMax = Math.abs(diffMax) <= snapThreshold;
+
+        if (snapMin && snapMax) {
+          shouldContinue = false;
+          return target;
         }
 
         return [
-          currentMin + diffMin * factor,
-          currentMax + diffMax * factor
+          currentMin + diffMin * stepFactor,
+          currentMax + diffMax * stepFactor
         ];
       });
+
+      frameRef.current += 1;
+
+      if (!shouldContinue || frameRef.current >= maxFrames || elapsed >= maxDuration) {
+        setCurrentDomain(targetRef.current);
+        return;
+      }
 
       animationRef.current = requestAnimationFrame(animate);
     };
@@ -250,7 +277,7 @@ function useLerpYDomain(targetDomain: [number, number] | undefined, factor = 0.1
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [factor, enabled, targetDomain]);
+  }, [enabled, factor, targetDomain]);
 
   return currentDomain;
 }
@@ -284,7 +311,7 @@ const ModelLegend = memo(function ModelLegend({
   return (
     <div className="mt-3 rounded-xl bg-slate-900/30 p-3 ring-1 ring-slate-800">
       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-        <span className="text-slate-400">颜色区分模型（悬停高亮，点击隐藏）</span>
+        <span className="text-slate-400">模型图例（悬停高亮，点击隐藏）</span>
       </div>
       <div className="mt-2 max-h-20 overflow-auto pr-1">
         <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-300">
@@ -539,6 +566,16 @@ export default function ExplorePage() {
 
     return zoomDomain;
   }, [dataBounds, zoomDomain, zoomSource, filteredPoints]);
+
+  // 仅渲染可视范围内的散点，并将数量用于动画降级
+  const visiblePoints = useMemo(() => {
+    if (!activeDomain) return filteredPoints;
+    const [xMin, xMax] = activeDomain.x;
+    const [yMin, yMax] = activeDomain.y;
+    return filteredPoints.filter(p => 
+      p.ts >= xMin && p.ts <= xMax && p.tokens >= yMin && p.tokens <= yMax
+    );
+  }, [filteredPoints, activeDomain]);
 
   // 使用平滑过渡的 Y 轴 domain (Lerp 动画)
   // 框选缩放时禁用动画，只有范围选择器缩放时才启用平滑过渡
@@ -1103,6 +1140,27 @@ export default function ExplorePage() {
     return maxSum || 1;
   }, [stackedAreaData, models]);
 
+  // 缓存 Y 轴刻度文本，减少 tickFormatter 的重复计算
+  const yTickLabelMap = useMemo(() => {
+    if (!computedYTicks) return null;
+
+    const labels = new Map<number, string>();
+    for (const tick of computedYTicks) {
+      const num = Number(tick);
+      if (num < 0) continue;
+      const scatterLabel = formatCompactNumber(num);
+
+      if (showStackedArea && activeDomain) {
+        const scatterTop = activeDomain.y[1] || 1;
+        const stackedValue = (num / scatterTop) * stackedMaxSum;
+        labels.set(num, `${scatterLabel} (${formatCompactNumber(stackedValue)})`);
+      } else {
+        labels.set(num, scatterLabel);
+      }
+    }
+    return labels;
+  }, [computedYTicks, showStackedArea, activeDomain, stackedMaxSum]);
+
   // 归一化堆叠数据 - 将堆叠值映射到散点图 Y 轴范围
   const normalizedStackedData = useMemo(() => {
     if (!showStackedArea || stackedAreaData.length === 0 || !activeDomain) return stackedAreaData;
@@ -1118,16 +1176,6 @@ export default function ExplorePage() {
       return normalized;
     });
   }, [showStackedArea, stackedAreaData, stackedMaxSum, activeDomain, models]);
-
-  // 性能优化：只渲染可视范围内的散点
-  const visiblePoints = useMemo(() => {
-    if (!activeDomain) return filteredPoints;
-    const [xMin, xMax] = activeDomain.x;
-    const [yMin, yMax] = activeDomain.y;
-    return filteredPoints.filter(p => 
-      p.ts >= xMin && p.ts <= xMax && p.tokens >= yMin && p.tokens <= yMax
-    );
-  }, [filteredPoints, activeDomain]);
 
   // 性能优化：只渲染可视范围内的堆叠面积数据
   const visibleStackedData = useMemo(() => {
@@ -1162,6 +1210,20 @@ export default function ExplorePage() {
   useEffect(() => {
     zoomSourceRef.current = zoomSource;
   }, [zoomSource]);
+
+  const mainChartMargin = useMemo(() => ({
+    ...CHART_MARGIN,
+    top: CHART_MARGIN.top + CHART_TOP_INSET
+  }), []);
+
+  const cartesianGridProps = useMemo(() => ({
+    yAxisId: "left",
+    strokeDasharray: "3 3",
+    stroke: "#64748b",
+    strokeOpacity: 0.6,
+    horizontal: true,
+    vertical: true
+  }), []);
 
   // 散点图点形状组件 - 仅依赖 modelColorMap，其他通过 ref 访问
   const dotShape = useMemo(() => {
@@ -1288,7 +1350,7 @@ export default function ExplorePage() {
                   }`}
                 />
               </button>
-              <span>模型堆叠分布</span>
+              <span>模型堆叠分布图</span>
             </label>
             <span className="text-xs text-slate-500">提示：拖拽框选可缩放区域</span>
           </div>
@@ -1379,7 +1441,7 @@ export default function ExplorePage() {
                 />
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart 
-                  margin={{ ...CHART_MARGIN, top: CHART_MARGIN.top + CHART_TOP_INSET }}
+                  margin={mainChartMargin}
                   data={visibleStackedData}
                   onMouseLeave={clearHover}
                 >
@@ -1408,15 +1470,10 @@ export default function ExplorePage() {
                       tickMargin={6}
                       tickFormatter={(v) => {
                         const num = Number(v);
+                        const cached = yTickLabelMap?.get(num);
+                        if (cached !== undefined) return cached;
                         if (num < 0) return '';
-                        const scatterLabel = formatCompactNumber(num);
-                        if (showStackedArea && activeDomain) {
-                          // 计算对应的堆叠值
-                          const stackedValue = (num / activeDomain.y[1]) * stackedMaxSum;
-                          const stackedLabel = formatCompactNumber(stackedValue);
-                          return `${scatterLabel} (${stackedLabel})`;
-                        }
-                        return scatterLabel;
+                        return formatCompactNumber(num);
                       }}
                       allowDataOverflow
                     />
@@ -1440,7 +1497,7 @@ export default function ExplorePage() {
                         isAnimationActive={false}
                       />
                     ))}
-                  <CartesianGrid yAxisId="left" strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.6} horizontal vertical />
+                  <CartesianGrid {...cartesianGridProps} />
                   <Tooltip
                     cursor={false}
                     content={() => null}
