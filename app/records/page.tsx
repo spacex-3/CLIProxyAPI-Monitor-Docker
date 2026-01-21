@@ -363,7 +363,7 @@ export default function RecordsPage() {
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">调用记录</h1>
-          <p className="text-base text-slate-400">展示模型调用明细，支持筛选与排序</p>
+          <p className="text-base text-slate-400">展示模型调用明细</p>
         </div>
         <div className="flex items-center gap-3 text-sm text-slate-300">
           <button

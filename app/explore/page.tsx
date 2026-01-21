@@ -1484,7 +1484,7 @@ export default function ExplorePage() {
       <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">数据探索</h1>
-          <p className="text-sm text-slate-400">每个点代表一次请求（X=时间，Y=token 数，颜色=模型）</p>
+          <p className="text-base text-slate-400">每个点代表一次请求（X=时间，Y=token 数，颜色=模型）</p>
         </div>
         <div className="flex flex-col items-start gap-2 text-sm text-slate-300 md:items-end">
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
