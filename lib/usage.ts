@@ -160,7 +160,7 @@ export function findPrice(model: string, prices: ReturnType<typeof priceMap>): P
 }
 
 export function estimateCost(
-  tokens: { inputTokens: number; cachedTokens?: number; outputTokens: number },
+  tokens: { inputTokens: number; cachedTokens?: number; outputTokens: number; reasoningTokens?: number },
   model: string,
   prices: ReturnType<typeof priceMap>
 ) {
@@ -168,9 +168,10 @@ export function estimateCost(
   if (!priceInfo) return 0;
   // 价格单位是 $/M tokens，所以除以 1_000_000
   const cachedTokens = tokens.cachedTokens ?? 0;
+  const reasoningTokens = tokens.reasoningTokens ?? 0;
   const regularInputTokens = Math.max(0, tokens.inputTokens - cachedTokens);
   const inputCost = (regularInputTokens / 1_000_000) * priceInfo.in;
   const cachedCost = (cachedTokens / 1_000_000) * priceInfo.cachedIn;
-  const outputCost = (tokens.outputTokens / 1_000_000) * priceInfo.out;
+  const outputCost = ((tokens.outputTokens + reasoningTokens) / 1_000_000) * priceInfo.out;
   return Number((inputCost + cachedCost + outputCost).toFixed(6));
 }

@@ -12,6 +12,7 @@ type ModelAggRow = {
   tokens: number;
   inputTokens: number;
   outputTokens: number;
+  reasoningTokens: number;
   cachedTokens: number;
 };
 type TotalsRow = {
@@ -25,7 +26,7 @@ type TotalsRow = {
   failureCount: number;
 };
 type DayAggRow = { label: string; requests: number; tokens: number };
-type DayModelAggRow = { label: string; model: string; inputTokens: number; outputTokens: number; cachedTokens: number };
+type DayModelAggRow = { label: string; model: string; inputTokens: number; outputTokens: number; reasoningTokens: number; cachedTokens: number };
 type HourAggRow = { 
   label: string;
   hourStart: Date | string;
@@ -136,6 +137,7 @@ export async function getOverview(
       tokens: sql<number>`sum(${usageRecords.totalTokens})`,
       inputTokens: sql<number>`sum(${usageRecords.inputTokens})`,
       outputTokens: sql<number>`sum(${usageRecords.outputTokens})`,
+      reasoningTokens: sql<number>`coalesce(sum(${usageRecords.reasoningTokens}), 0)`,
       cachedTokens: sql<number>`coalesce(sum(${usageRecords.cachedTokens}), 0)`
     })
     .from(usageRecords)
@@ -163,6 +165,7 @@ export async function getOverview(
       model: usageRecords.model,
       inputTokens: sql<number>`sum(${usageRecords.inputTokens})`,
       outputTokens: sql<number>`sum(${usageRecords.outputTokens})`,
+      reasoningTokens: sql<number>`coalesce(sum(${usageRecords.reasoningTokens}), 0)`,
       cachedTokens: sql<number>`coalesce(sum(${usageRecords.cachedTokens}), 0)`
     })
     .from(usageRecords)
@@ -237,7 +240,12 @@ export async function getOverview(
 
   const models: ModelUsage[] = byModelRows.map((row) => {
     const cost = estimateCost(
-      { inputTokens: toNumber(row.inputTokens), cachedTokens: toNumber(row.cachedTokens), outputTokens: toNumber(row.outputTokens) },
+      {
+        inputTokens: toNumber(row.inputTokens),
+        cachedTokens: toNumber(row.cachedTokens),
+        outputTokens: toNumber(row.outputTokens),
+        reasoningTokens: toNumber(row.reasoningTokens)
+      },
       row.model,
       prices
     );
@@ -254,7 +262,12 @@ export async function getOverview(
   const dailyCostMap = new Map<string, number>();
   for (const row of byDayModelRows) {
     const cost = estimateCost(
-      { inputTokens: toNumber(row.inputTokens), cachedTokens: toNumber(row.cachedTokens), outputTokens: toNumber(row.outputTokens) },
+      {
+        inputTokens: toNumber(row.inputTokens),
+        cachedTokens: toNumber(row.cachedTokens),
+        outputTokens: toNumber(row.outputTokens),
+        reasoningTokens: toNumber(row.reasoningTokens)
+      },
       row.model,
       prices
     );
