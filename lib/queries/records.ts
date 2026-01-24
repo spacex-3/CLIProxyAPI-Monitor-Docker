@@ -35,34 +35,36 @@ type SortField =
   | "isError";
 type SortOrder = "asc" | "desc";
 
+// 注意：必须使用 sql.raw() 来引用外部表字段，否则 Drizzle 会丢失表名前缀
+// 反斜杠需要双重转义：JS 字符串转义 + PostgreSQL E'' 字符串转义
 const COST_EXPR = sql<number>`coalesce(
   -- 尝试精确匹配
   (select (
-    (greatest(${usageRecords.inputTokens} - ${usageRecords.cachedTokens}, 0)::numeric / 1000000) * mp.input_price_per_1m
-    + (${usageRecords.cachedTokens}::numeric / 1000000) * mp.cached_input_price_per_1m
-    + ((${usageRecords.outputTokens} + ${usageRecords.reasoningTokens})::numeric / 1000000) * mp.output_price_per_1m
+    (greatest(${sql.raw('"usage_records"."input_tokens"')} - ${sql.raw('"usage_records"."cached_tokens"')}, 0)::numeric / 1000000) * mp.input_price_per_1m
+    + (${sql.raw('"usage_records"."cached_tokens"')}::numeric / 1000000) * mp.cached_input_price_per_1m
+    + ((${sql.raw('"usage_records"."output_tokens"')} + ${sql.raw('"usage_records"."reasoning_tokens"')})::numeric / 1000000) * mp.output_price_per_1m
   )
   from model_prices mp
-  where mp.model = ${usageRecords.model}
+  where mp.model = ${sql.raw('"usage_records"."model"')}
   limit 1),
   -- 如果精确匹配失败，尝试通配符匹配（按非通配符字符数量降序选择最具体的）
   (select (
-    (greatest(${usageRecords.inputTokens} - ${usageRecords.cachedTokens}, 0)::numeric / 1000000) * mp.input_price_per_1m
-    + (${usageRecords.cachedTokens}::numeric / 1000000) * mp.cached_input_price_per_1m
-    + ((${usageRecords.outputTokens} + ${usageRecords.reasoningTokens})::numeric / 1000000) * mp.output_price_per_1m
+    (greatest(${sql.raw('"usage_records"."input_tokens"')} - ${sql.raw('"usage_records"."cached_tokens"')}, 0)::numeric / 1000000) * mp.input_price_per_1m
+    + (${sql.raw('"usage_records"."cached_tokens"')}::numeric / 1000000) * mp.cached_input_price_per_1m
+    + ((${sql.raw('"usage_records"."output_tokens"')} + ${sql.raw('"usage_records"."reasoning_tokens"')})::numeric / 1000000) * mp.output_price_per_1m
   )
   from model_prices mp
   where mp.model like '%*%'
-    and ${usageRecords.model} ~ (
+    and ${sql.raw('"usage_records"."model"')} ~ (
       '^' ||
       regexp_replace(
         regexp_replace(
           mp.model,
-          E'([.+?^$()\\[\\]{}|\\\\-])',   -- 先转义正则元字符
-          E'\\\\\\1',
+          E'([.+?^$()\\\\[\\\\]{}|\\\\\\\\-])',
+          E'\\\\\\\\\\\\1',
           'g'
         ),
-        E'\\*',                          -- 再把字面量 * -> .*
+        E'\\\\*',
         '.*',
         'g'
       )
@@ -182,7 +184,7 @@ export async function getUsageRecords(input: {
 
   const where = whereParts.length ? and(...whereParts) : undefined;
 
-  const rows = await db
+  const query = db
     .select({
       id: usageRecords.id,
       occurredAt: usageRecords.occurredAt,
@@ -203,6 +205,8 @@ export async function getUsageRecords(input: {
       sortOrder === "asc" ? asc(usageRecords.id) : desc(usageRecords.id)
     )
     .limit(limit + 1);
+
+  const rows = await query;
 
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;

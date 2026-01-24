@@ -133,18 +133,25 @@ type PriceInfo = { in: number; cachedIn: number; out: number };
 export function priceMap(prices: PriceEntry[]) {
   // 分离精确匹配和通配符模式
   const exact: Record<string, PriceInfo> = {};
-  const patterns: { regex: RegExp; price: PriceInfo }[] = [];
+  const patterns: { regex: RegExp; price: PriceInfo; original: string }[] = [];
   
   for (const cur of prices) {
     const price: PriceInfo = { in: cur.inputPricePer1M, cachedIn: cur.cachedInputPricePer1M, out: cur.outputPricePer1M };
     if (cur.model.includes("*")) {
       // 转换通配符为正则：* -> .* 
       const regexStr = "^" + cur.model.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$";
-      patterns.push({ regex: new RegExp(regexStr), price });
+      patterns.push({ regex: new RegExp(regexStr), price, original: cur.model });
     } else {
       exact[cur.model] = price;
     }
   }
+  
+  // 按非通配符字符数量降序排序，优先匹配更具体的模式（与 SQL 逻辑保持一致）
+  patterns.sort((a, b) => {
+    const aSpecificity = a.original.replace(/\*/g, "").length;
+    const bSpecificity = b.original.replace(/\*/g, "").length;
+    return bSpecificity - aSpecificity || b.original.length - a.original.length;
+  });
   
   return { exact, patterns };
 }
