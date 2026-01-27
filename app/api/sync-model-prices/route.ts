@@ -110,13 +110,14 @@ export async function POST(request: Request) {
       cache: "no-store"
     });
 
+    // 处理 304 Not Modified 响应
     if (modelsDevRes.status === 304) {
       if (!modelsDevCache) {
         return NextResponse.json({ error: "models.dev 返回未修改且无本地缓存" }, { status: 502 });
       }
-    }
-
-    if (!modelsDevRes.ok) {
+      // 304 且有缓存，继续使用缓存数据
+    } else if (!modelsDevRes.ok) {
+      // 其他非 2xx 状态视为错误
       return NextResponse.json({ error: `无法获取 models.dev 数据: ${modelsDevRes.status}` }, { status: 502 });
     }
 
