@@ -1,5 +1,6 @@
 services:
   app:
+    container_name: cpa-monitor-app
     image: ${APP_IMAGE:-ghcr.io/spacex-3/cliproxyapi-monitor-docker:latest}
     pull_policy: always
     restart: unless-stopped
@@ -16,6 +17,7 @@ services:
         condition: service_healthy
 
   db:
+    container_name: cpa-monitor-db
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
