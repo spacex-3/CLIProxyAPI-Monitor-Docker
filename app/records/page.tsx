@@ -156,6 +156,10 @@ export default function RecordsPage() {
 
   const [sortField, setSortField] = useState<SortField>("occurredAt");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [hideRouteValue, setHideRouteValue] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("records-hide-route") === "1";
+  });
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingRef = useRef(false);
@@ -356,14 +360,14 @@ export default function RecordsPage() {
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
     if (appliedModel) parts.push(`模型: ${appliedModel}`);
-    if (appliedRoute) parts.push(`密钥: ${appliedRoute}`);
+    if (appliedRoute) parts.push(`密钥: ${hideRouteValue ? "-" : appliedRoute}`);
     if (appliedStart || appliedEnd) {
       const startLabel = appliedStart ? formatDateTimeDisplay(appliedStart) : "-";
       const endLabel = appliedEnd ? formatDateTimeDisplay(appliedEnd) : "-";
       parts.push(`时间: ${startLabel} ~ ${endLabel}`);
     }
     return parts.length ? parts.join(" / ") : "暂无筛选";
-  }, [appliedModel, appliedRoute, appliedStart, appliedEnd]);
+  }, [appliedModel, appliedRoute, appliedStart, appliedEnd, hideRouteValue]);
 
   const rangeLabel = useMemo(() => {
     if (!startInput && !endInput) return "选择时间范围";
@@ -421,6 +425,11 @@ export default function RecordsPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [rangePickerOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("records-hide-route", hideRouteValue ? "1" : "0");
+  }, [hideRouteValue]);
 
   return (
     <main className="min-h-screen bg-slate-900 px-6 py-8 text-slate-100">
@@ -607,6 +616,27 @@ export default function RecordsPage() {
               重置
             </button>
           </div>
+
+          <div className="ml-auto flex items-center gap-3">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-300">
+              <span>隐藏密钥</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hideRouteValue}
+                onClick={() => setHideRouteValue((prev) => !prev)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
+                  hideRouteValue ? "bg-indigo-500" : "bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    hideRouteValue ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </label>
+          </div>
         </div>
         <p className="mt-3 text-xs text-slate-500">当前筛选：{filterSummary}</p>
       </section>
@@ -714,8 +744,8 @@ export default function RecordsPage() {
                     </div>
                   </td>
                   <td className="px-3 py-3 first:rounded-l-lg last:rounded-r-lg">
-                    <div className="max-w-[200px] truncate text-slate-300" title={row.route}>
-                      {row.route}
+                    <div className="max-w-[200px] truncate text-slate-300" title={hideRouteValue ? "-" : row.route}>
+                      {hideRouteValue ? "-" : row.route}
                     </div>
                   </td>
                   <td className="px-3 py-3 first:rounded-l-lg last:rounded-r-lg">
