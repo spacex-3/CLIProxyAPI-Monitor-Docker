@@ -1,9 +1,7 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: cliproxyapi-monitor:latest
+    image: ${APP_IMAGE:-ghcr.io/spacex-3/cliproxyapi-monitor-docker:latest}
+    pull_policy: always
     restart: unless-stopped
     ports:
       - "3000:3000"
