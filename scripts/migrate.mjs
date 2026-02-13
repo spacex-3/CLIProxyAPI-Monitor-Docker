@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/vercel-postgres";
-import { createPool } from "@vercel/postgres";
-import { migrate } from "drizzle-orm/vercel-postgres/migrator";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 
-const pool = createPool({
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL
 });
 

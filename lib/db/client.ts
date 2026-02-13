@@ -1,7 +1,7 @@
-import { drizzle } from "drizzle-orm/vercel-postgres";
-import { createPool } from "@vercel/postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 
-const pool = createPool({
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL
 });
 
