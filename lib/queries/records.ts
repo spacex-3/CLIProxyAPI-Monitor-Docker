@@ -1,13 +1,14 @@
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { modelPrices, usageRecords } from "@/lib/db/schema";
+import { authFileMappings, modelPrices, usageRecords } from "@/lib/db/schema";
 
 export type UsageRecordRow = {
   id: number;
   occurredAt: Date;
   route: string;
   source: string;
+  credentialName: string;
   model: string;
   totalTokens: number;
   inputTokens: number;
@@ -77,6 +78,8 @@ const COST_EXPR = sql<number>`coalesce(
   -- 如果都没匹配，返回 0
   0
 )`;
+
+const CREDENTIAL_NAME_EXPR = sql<string>`coalesce(nullif(${authFileMappings.name}, ''), nullif(${usageRecords.source}, ''), '-')`;
 
 function parseCursor(input: string | null): UsageRecordCursor | null {
   if (!input) return null;
@@ -167,7 +170,7 @@ export async function getUsageRecords(input: {
       case "route":
         return usageRecords.route;
       case "source":
-        return usageRecords.source;
+        return CREDENTIAL_NAME_EXPR;
       case "totalTokens":
         return usageRecords.totalTokens;
       case "inputTokens":
@@ -199,6 +202,7 @@ export async function getUsageRecords(input: {
       occurredAt: usageRecords.occurredAt,
       route: usageRecords.route,
       source: usageRecords.source,
+      credentialName: CREDENTIAL_NAME_EXPR,
       model: usageRecords.model,
       totalTokens: usageRecords.totalTokens,
       inputTokens: usageRecords.inputTokens,
@@ -209,6 +213,7 @@ export async function getUsageRecords(input: {
       cost: COST_EXPR
     })
     .from(usageRecords)
+    .leftJoin(authFileMappings, eq(usageRecords.authIndex, authFileMappings.authId))
     .where(where)
     .orderBy(
       sortOrder === "asc" ? asc(sortExpr) : desc(sortExpr),
@@ -236,7 +241,7 @@ export async function getUsageRecords(input: {
         case "route":
           return last.route;
         case "source":
-          return last.source;
+          return last.credentialName;
         case "inputTokens":
           return last.inputTokens;
         case "outputTokens":
@@ -279,7 +284,7 @@ export async function getUsageRecords(input: {
         .where(where)
         .groupBy(usageRecords.source)
         .orderBy(usageRecords.source)
-        .limit(200)
+        .limit(200),
     ]);
     filters = {
       models: modelRows.map((row) => row.model),

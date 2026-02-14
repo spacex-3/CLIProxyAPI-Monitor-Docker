@@ -12,6 +12,7 @@ type UsageRecord = {
   occurredAt: string;
   route: string;
   source: string;
+  credentialName: string;
   model: string;
   totalTokens: number;
   inputTokens: number;
@@ -787,8 +788,8 @@ export default function RecordsPage() {
                     </div>
                   </td>
                   <td className="px-3 py-3 first:rounded-l-lg last:rounded-r-lg">
-                    <div className="max-w-[220px] truncate text-slate-300" title={hideRouteValue ? "-" : row.source || "-"}>
-                      {hideRouteValue ? "-" : row.source || "-"}
+                    <div className="max-w-[220px] truncate text-slate-300" title={hideRouteValue ? "-" : row.credentialName || "-"}>
+                      {hideRouteValue ? "-" : row.credentialName || "-"}
                     </div>
                   </td>
                   <td className="px-3 py-3 first:rounded-l-lg last:rounded-r-lg">

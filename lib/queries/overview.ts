@@ -1,7 +1,7 @@
 import { and, eq, sql, gte, lte, desc } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { modelPrices, usageRecords } from "@/lib/db/schema";
+import { authFileMappings, modelPrices, usageRecords } from "@/lib/db/schema";
 import type { UsageOverview, ModelUsage, UsageSeriesPoint } from "@/lib/types";
 import { estimateCost, priceMap } from "@/lib/usage";
 
@@ -84,8 +84,8 @@ function normalizePageSize(value?: number | null) {
 
 export async function getOverview(
   daysInput?: number,
-  opts?: { model?: string | null; route?: string | null; source?: string | null; page?: number | null; pageSize?: number | null; start?: string | Date | null; end?: string | Date | null; timezone?: string | null }
-): Promise<{ overview: UsageOverview; empty: boolean; days: number; meta: OverviewMeta; filters: { models: string[]; routes: string[]; sources: string[] }; timezone: string }> {
+  opts?: { model?: string | null; route?: string | null; source?: string | null; name?: string | null; page?: number | null; pageSize?: number | null; start?: string | Date | null; end?: string | Date | null; timezone?: string | null }
+): Promise<{ overview: UsageOverview; empty: boolean; days: number; meta: OverviewMeta; filters: { models: string[]; routes: string[]; sources: string[]; names: string[] }; timezone: string }> {
   const startDate = parseDateInput(opts?.start);
   const endDate = parseDateInput(opts?.end);
   const hasCustomRange = startDate && endDate && endDate >= startDate;
@@ -105,6 +105,11 @@ export async function getOverview(
   if (opts?.model) filterWhereParts.push(eq(usageRecords.model, opts.model));
   if (opts?.route) filterWhereParts.push(eq(usageRecords.route, opts.route));
   if (opts?.source) filterWhereParts.push(eq(usageRecords.source, opts.source));
+  if (opts?.name) {
+    filterWhereParts.push(
+      sql`exists (select 1 from auth_file_mappings af where af.auth_id = ${usageRecords.authIndex} and af.name = ${opts.name})`
+    );
+  }
   const filterWhere = filterWhereParts.length ? and(...filterWhereParts) : undefined;
 
   const tz = opts?.timezone || "Asia/Shanghai";
@@ -218,6 +223,14 @@ export async function getOverview(
     .groupBy(usageRecords.source)
     .orderBy(usageRecords.source);
 
+  const availableNamesPromise: Promise<{ name: string | null }[]> = db
+    .select({ name: authFileMappings.name })
+    .from(usageRecords)
+    .leftJoin(authFileMappings, eq(usageRecords.authIndex, authFileMappings.authId))
+    .where(baseWhere)
+    .groupBy(authFileMappings.name)
+    .orderBy(authFileMappings.name);
+
   const [
     totalsRowResult,
     priceRows,
@@ -228,7 +241,8 @@ export async function getOverview(
     byHourRows,
     availableModelsRows,
     availableRoutesRows,
-    availableSourcesRows
+    availableSourcesRows,
+    availableNamesRows
   ] = await Promise.all([
     totalsPromise,
     pricePromise,
@@ -239,7 +253,8 @@ export async function getOverview(
     byHourPromise,
     availableModelsPromise,
     availableRoutesPromise,
-    availableSourcesPromise
+    availableSourcesPromise,
+    availableNamesPromise
   ]);
 
   const totalsRow =
@@ -341,7 +356,8 @@ export async function getOverview(
   const filters = {
     models: availableModelsRows.map((r) => r.model).filter(Boolean),
     routes: availableRoutesRows.map((r) => r.route).filter(Boolean),
-    sources: availableSourcesRows.map((r) => r.source).filter(Boolean)
+    sources: availableSourcesRows.map((r) => r.source).filter(Boolean),
+    names: availableNamesRows.map((r) => r.name).filter((name): name is string => Boolean(name))
   };
 
   return {

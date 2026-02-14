@@ -17,6 +17,7 @@ export const usageRecords = pgTable(
     syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
     route: text("route").notNull(),
     source: text("source").notNull().default(""),
+    authIndex: text("auth_index"),
     model: text("model").notNull(),
     totalTokens: integer("total_tokens").notNull(),
     inputTokens: integer("input_tokens").notNull(),
@@ -30,3 +31,14 @@ export const usageRecords = pgTable(
     uniq: uniqueIndex("usage_records_occurred_route_model_source_idx").on(table.occurredAt, table.route, table.model, table.source)
   })
 );
+
+export const authFileMappings = pgTable("auth_file_mappings", {
+  authId: text("auth_id").primaryKey(),
+  name: text("name").notNull().default(""),
+  label: text("label"),
+  provider: text("provider"),
+  source: text("source"),
+  email: text("email"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull()
+});
