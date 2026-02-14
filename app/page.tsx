@@ -23,7 +23,7 @@ const PIE_COLORS = [
 ];
 
 type OverviewMeta = { page: number; pageSize: number; totalModels: number; totalPages: number };
-type OverviewAPIResponse = { overview: UsageOverview | null; empty: boolean; days: number; timezone?: string; meta?: OverviewMeta; filters?: { models: string[]; routes: string[] } };
+type OverviewAPIResponse = { overview: UsageOverview | null; empty: boolean; days: number; timezone?: string; meta?: OverviewMeta; filters?: { models: string[]; routes: string[]; sources: string[] } };
 
 type PriceForm = {
   model: string;
@@ -184,10 +184,13 @@ export default function DashboardPage() {
   const [hourRange, setHourRange] = useState<"all" | "24h" | "72h">("all");
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [routeOptions, setRouteOptions] = useState<string[]>([]);
+  const [sourceOptions, setSourceOptions] = useState<string[]>([]);
   const [filterModelInput, setFilterModelInput] = useState("");
   const [filterRouteInput, setFilterRouteInput] = useState("");
+  const [filterSourceInput, setFilterSourceInput] = useState("");
   const [filterModel, setFilterModel] = useState<string | undefined>(undefined);
   const [filterRoute, setFilterRoute] = useState<string | undefined>(undefined);
+  const [filterSource, setFilterSource] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [form, setForm] = useState<PriceForm>({ model: "", inputPricePer1M: "", cachedInputPricePer1M: "", outputPricePer1M: "" });
   const [status, setStatus] = useState<string | null>(null);
@@ -716,6 +719,7 @@ export default function DashboardPage() {
         }
         if (filterModel) params.set("model", filterModel);
         if (filterRoute) params.set("route", filterRoute);
+        if (filterSource) params.set("source", filterSource);
         params.set("page", String(page));
         params.set("pageSize", "500");
 
@@ -742,6 +746,7 @@ export default function DashboardPage() {
         setPage(data.meta?.page ?? 1);
         setModelOptions(Array.from(new Set(data.filters?.models ?? [])));
         setRouteOptions(Array.from(new Set(data.filters?.routes ?? [])));
+        setSourceOptions(Array.from(new Set(data.filters?.sources ?? [])));
         setAppliedDays(data.days ?? rangeDays);
       } catch (err) {
         if (!active) return;
@@ -758,7 +763,7 @@ export default function DashboardPage() {
       active = false;
       controller.abort();
     };
-  }, [rangeMode, customStart, customEnd, rangeDays, filterModel, filterRoute, page, refreshTrigger, ready]);
+  }, [rangeMode, customStart, customEnd, rangeDays, filterModel, filterRoute, filterSource, page, refreshTrigger, ready]);
 
   const overviewData = overview;
   const showEmpty = overviewEmpty || !overview;
@@ -876,6 +881,7 @@ export default function DashboardPage() {
     setPage(1);
     setFilterModel(filterModelInput.trim() || undefined);
     setFilterRoute(filterRouteInput.trim() || undefined);
+    setFilterSource(filterSourceInput.trim() || undefined);
   };
 
   const applyModelOption = (val: string) => {
@@ -887,6 +893,12 @@ export default function DashboardPage() {
   const applyRouteOption = (val: string) => {
     setFilterRouteInput(val);
     setFilterRoute(val.trim() || undefined);
+    setPage(1);
+  };
+
+  const applySourceOption = (val: string) => {
+    setFilterSourceInput(val);
+    setFilterSource(val.trim() || undefined);
     setPage(1);
   };
 
@@ -1244,19 +1256,34 @@ export default function DashboardPage() {
               setPage(1);
             }}
           />
+          <ComboBox
+            value={filterSourceInput}
+            onChange={setFilterSourceInput}
+            options={sourceOptions}
+            placeholder="按凭证过滤"
+            darkMode={darkMode}
+            onSelectOption={applySourceOption}
+            onClear={() => {
+              setFilterSourceInput("");
+              setFilterSource(undefined);
+              setPage(1);
+            }}
+          />
           <button
             onClick={applyFilters}
             className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${darkMode ? "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
           >
             应用筛选
           </button>
-          {(filterModel || filterRoute) ? (
+          {(filterModel || filterRoute || filterSource) ? (
             <button
               onClick={() => {
                 setFilterModelInput("");
                 setFilterRouteInput("");
+                setFilterSourceInput("");
                 setFilterModel(undefined);
                 setFilterRoute(undefined);
+                setFilterSource(undefined);
                 setPage(1);
               }}
               className={`rounded-lg border px-3 py-1.5 text-sm transition ${darkMode ? "border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-500" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}

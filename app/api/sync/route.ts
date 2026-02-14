@@ -98,7 +98,7 @@ async function performSync(request: Request) {
     insertedRows = await db
       .insert(usageRecords)
       .values(rows)
-      .onConflictDoNothing({ target: [usageRecords.occurredAt, usageRecords.route, usageRecords.model] })
+      .onConflictDoNothing({ target: [usageRecords.occurredAt, usageRecords.route, usageRecords.model, usageRecords.source] })
       .returning({ id: usageRecords.id });
   } catch (dbError) {
     console.error("/api/sync database insert failed:", dbError);

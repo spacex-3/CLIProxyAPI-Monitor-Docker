@@ -84,8 +84,8 @@ function normalizePageSize(value?: number | null) {
 
 export async function getOverview(
   daysInput?: number,
-  opts?: { model?: string | null; route?: string | null; page?: number | null; pageSize?: number | null; start?: string | Date | null; end?: string | Date | null; timezone?: string | null }
-): Promise<{ overview: UsageOverview; empty: boolean; days: number; meta: OverviewMeta; filters: { models: string[]; routes: string[] }; timezone: string }> {
+  opts?: { model?: string | null; route?: string | null; source?: string | null; page?: number | null; pageSize?: number | null; start?: string | Date | null; end?: string | Date | null; timezone?: string | null }
+): Promise<{ overview: UsageOverview; empty: boolean; days: number; meta: OverviewMeta; filters: { models: string[]; routes: string[]; sources: string[] }; timezone: string }> {
   const startDate = parseDateInput(opts?.start);
   const endDate = parseDateInput(opts?.end);
   const hasCustomRange = startDate && endDate && endDate >= startDate;
@@ -104,6 +104,7 @@ export async function getOverview(
   const filterWhereParts: SQL[] = [...baseWhereParts];
   if (opts?.model) filterWhereParts.push(eq(usageRecords.model, opts.model));
   if (opts?.route) filterWhereParts.push(eq(usageRecords.route, opts.route));
+  if (opts?.source) filterWhereParts.push(eq(usageRecords.source, opts.source));
   const filterWhere = filterWhereParts.length ? and(...filterWhereParts) : undefined;
 
   const tz = opts?.timezone || "Asia/Shanghai";
@@ -210,6 +211,13 @@ export async function getOverview(
     .groupBy(usageRecords.route)
     .orderBy(usageRecords.route);
 
+  const availableSourcesPromise: Promise<{ source: string }[]> = db
+    .select({ source: usageRecords.source })
+    .from(usageRecords)
+    .where(baseWhere)
+    .groupBy(usageRecords.source)
+    .orderBy(usageRecords.source);
+
   const [
     totalsRowResult,
     priceRows,
@@ -219,7 +227,8 @@ export async function getOverview(
     byDayModelRows,
     byHourRows,
     availableModelsRows,
-    availableRoutesRows
+    availableRoutesRows,
+    availableSourcesRows
   ] = await Promise.all([
     totalsPromise,
     pricePromise,
@@ -229,7 +238,8 @@ export async function getOverview(
     byDayModelPromise,
     byHourPromise,
     availableModelsPromise,
-    availableRoutesPromise
+    availableRoutesPromise,
+    availableSourcesPromise
   ]);
 
   const totalsRow =
@@ -330,7 +340,8 @@ export async function getOverview(
 
   const filters = {
     models: availableModelsRows.map((r) => r.model).filter(Boolean),
-    routes: availableRoutesRows.map((r) => r.route).filter(Boolean)
+    routes: availableRoutesRows.map((r) => r.route).filter(Boolean),
+    sources: availableSourcesRows.map((r) => r.source).filter(Boolean)
   };
 
   return {

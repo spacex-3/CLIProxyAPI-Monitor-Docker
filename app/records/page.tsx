@@ -11,6 +11,7 @@ type UsageRecord = {
   id: number;
   occurredAt: string;
   route: string;
+  source: string;
   model: string;
   totalTokens: number;
   inputTokens: number;
@@ -24,13 +25,14 @@ type UsageRecord = {
 type RecordsResponse = {
   items: UsageRecord[];
   nextCursor: string | null;
-  filters?: { models: string[]; routes: string[] };
+  filters?: { models: string[]; routes: string[]; sources: string[] };
 };
 
 type SortField =
   | "occurredAt"
   | "model"
   | "route"
+  | "source"
   | "totalTokens"
   | "inputTokens"
   | "outputTokens"
@@ -137,8 +139,10 @@ export default function RecordsPage() {
 
   const [models, setModels] = useState<string[]>([]);
   const [routes, setRoutes] = useState<string[]>([]);
+  const [sources, setSources] = useState<string[]>([]);
   const [modelInput, setModelInput] = useState("");
   const [routeInput, setRouteInput] = useState("");
+  const [sourceInput, setSourceInput] = useState("");
   const [startInput, setStartInput] = useState("");
   const [endInput, setEndInput] = useState("");
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
@@ -150,6 +154,7 @@ export default function RecordsPage() {
 
   const [appliedModel, setAppliedModel] = useState<string>("");
   const [appliedRoute, setAppliedRoute] = useState<string>("");
+  const [appliedSource, setAppliedSource] = useState<string>("");
   const [appliedStart, setAppliedStart] = useState<string>("");
   const [appliedEnd, setAppliedEnd] = useState<string>("");
 
@@ -175,12 +180,13 @@ export default function RecordsPage() {
       if (cursorValue) params.set("cursor", cursorValue);
       if (appliedModel) params.set("model", appliedModel);
       if (appliedRoute) params.set("route", appliedRoute);
+      if (appliedSource) params.set("source", appliedSource);
       if (appliedStart) params.set("start", new Date(appliedStart).toISOString());
       if (appliedEnd) params.set("end", new Date(appliedEnd).toISOString());
       if (includeFilters) params.set("includeFilters", "1");
       return params;
     },
-    [sortField, sortOrder, appliedModel, appliedRoute, appliedStart, appliedEnd]
+    [sortField, sortOrder, appliedModel, appliedRoute, appliedSource, appliedStart, appliedEnd]
   );
 
   const fetchRecords = useCallback(
@@ -203,6 +209,9 @@ export default function RecordsPage() {
         }
         if (data.filters?.routes?.length) {
           setRoutes(data.filters.routes);
+        }
+        if (data.filters?.sources?.length) {
+          setSources(data.filters.sources);
         }
       } catch (err) {
         setError((err as Error).message || "加载失败");
@@ -318,13 +327,15 @@ export default function RecordsPage() {
     resetAndFetch(false);
   }, [sortField, sortOrder, resetAndFetch]);
 
-  const applyFilters = (overrides?: { model?: string; route?: string; start?: string; end?: string }) => {
+  const applyFilters = (overrides?: { model?: string; route?: string; source?: string; start?: string; end?: string }) => {
     const nextModel = (overrides?.model ?? modelInput).trim();
     const nextRoute = (overrides?.route ?? routeInput).trim();
+    const nextSource = (overrides?.source ?? sourceInput).trim();
     const nextStart = overrides?.start ?? startInput;
     const nextEnd = overrides?.end ?? endInput;
     setAppliedModel(nextModel);
     setAppliedRoute(nextRoute);
+    setAppliedSource(nextSource);
     setAppliedStart(nextStart);
     setAppliedEnd(nextEnd);
   };
@@ -339,9 +350,14 @@ export default function RecordsPage() {
     setAppliedRoute(val.trim());
   };
 
+  const applySourceOption = (val: string) => {
+    setSourceInput(val);
+    setAppliedSource(val.trim());
+  };
+
   useEffect(() => {
     resetAndFetch(false);
-  }, [appliedModel, appliedRoute, appliedStart, appliedEnd, resetAndFetch]);
+  }, [appliedModel, appliedRoute, appliedSource, appliedStart, appliedEnd, resetAndFetch]);
 
   const costTone = useCallback((cost: number) => {
     if (cost >= 5) return "bg-red-500/20 text-red-300 ring-1 ring-red-500/40";
@@ -359,14 +375,15 @@ export default function RecordsPage() {
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
     if (appliedModel) parts.push(`模型: ${appliedModel}`);
-    if (appliedRoute) parts.push(`密钥: ${hideRouteValue ? "-" : appliedRoute}`);
+    if (appliedRoute) parts.push(`密钥: ${appliedRoute}`);
+    if (appliedSource) parts.push(`凭证: ${hideRouteValue ? "-" : appliedSource}`);
     if (appliedStart || appliedEnd) {
       const startLabel = appliedStart ? formatDateTimeDisplay(appliedStart) : "-";
       const endLabel = appliedEnd ? formatDateTimeDisplay(appliedEnd) : "-";
       parts.push(`时间: ${startLabel} ~ ${endLabel}`);
     }
     return parts.length ? parts.join(" / ") : "暂无筛选";
-  }, [appliedModel, appliedRoute, appliedStart, appliedEnd, hideRouteValue]);
+  }, [appliedModel, appliedRoute, appliedSource, appliedStart, appliedEnd, hideRouteValue]);
 
   const rangeLabel = useMemo(() => {
     if (!startInput && !endInput) return "选择时间范围";
@@ -489,6 +506,18 @@ export default function RecordsPage() {
               setAppliedRoute("");
             }}
           />
+          <ComboBox
+            value={sourceInput}
+            onChange={setSourceInput}
+            options={sources}
+            placeholder="按凭证过滤"
+            darkMode={true}
+            onSelectOption={applySourceOption}
+            onClear={() => {
+              setSourceInput("");
+              setAppliedSource("");
+            }}
+          />
 
           <div className="relative" ref={rangePickerRef}>
             <button
@@ -603,10 +632,12 @@ export default function RecordsPage() {
               onClick={() => {
                 setModelInput("");
                 setRouteInput("");
+                setSourceInput("");
                 setStartInput("");
                 setEndInput("");
                 setAppliedModel("");
                 setAppliedRoute("");
+                setAppliedSource("");
                 setAppliedStart("");
                 setAppliedEnd("");
               }}
@@ -618,7 +649,7 @@ export default function RecordsPage() {
 
           <div className="ml-auto flex items-center gap-3">
             <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-              <span>隐藏密钥</span>
+              <span>隐藏凭证</span>
               <button
                 type="button"
                 role="switch"
@@ -642,7 +673,7 @@ export default function RecordsPage() {
 
       <section className={`mt-5 rounded-2xl bg-slate-800/40 p-4 shadow-sm ring-1 ring-slate-700 ${loadingEmpty ? "min-h-[100vh]" : ""}`}>
         <div className="overflow-auto">
-          <table className="min-w-[1200px] w-[99%] mx-auto table-fixed border-separate border-spacing-y-2">
+          <table className="min-w-[1360px] w-[99%] mx-auto table-fixed border-separate border-spacing-y-2">
             <thead className="sticky top-0 z-10">
               <tr className="text-left text-xs uppercase tracking-wider text-slate-400">
                 <th className="px-3 py-2 w-40">
@@ -667,6 +698,14 @@ export default function RecordsPage() {
                     active={sortField === "route"}
                     order={sortOrder}
                     onClick={() => handleSort("route")}
+                  />
+                </th>
+                <th className="px-3 py-2 w-56">
+                  <SortHeader
+                    label="凭证"
+                    active={sortField === "source"}
+                    order={sortOrder}
+                    onClick={() => handleSort("source")}
                   />
                 </th>
                 <th className="px-3 py-2 w-28">
@@ -743,8 +782,13 @@ export default function RecordsPage() {
                     </div>
                   </td>
                   <td className="px-3 py-3 first:rounded-l-lg last:rounded-r-lg">
-                    <div className="max-w-[200px] truncate text-slate-300" title={hideRouteValue ? "-" : row.route}>
-                      {hideRouteValue ? "-" : row.route}
+                    <div className="max-w-[200px] truncate text-slate-300" title={row.route}>
+                      {row.route}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 first:rounded-l-lg last:rounded-r-lg">
+                    <div className="max-w-[220px] truncate text-slate-300" title={hideRouteValue ? "-" : row.source || "-"}>
+                      {hideRouteValue ? "-" : row.source || "-"}
                     </div>
                   </td>
                   <td className="px-3 py-3 first:rounded-l-lg last:rounded-r-lg">
