@@ -728,17 +728,41 @@ export default function RecordsPage() {
   }, []);
 
   const providerTone = useCallback((provider: string | null) => {
-    const val = (provider || "").toLowerCase();
-    if (val.includes("openai")) return "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/40";
-    if (val.includes("anthropic") || val.includes("claude")) return "bg-orange-500/20 text-orange-200 ring-1 ring-orange-500/40";
-    if (val.includes("google") || val.includes("gemini")) return "bg-blue-500/20 text-blue-200 ring-1 ring-blue-500/40";
+    const val = (provider || "").trim().toLowerCase();
+
+    // 指定 provider（无视大小写）
+    if (val.includes("geminicli") || val.includes("gemini")) {
+      return "bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-500/40";
+    }
+    if (val.includes("vertex")) return "bg-sky-500/20 text-sky-200 ring-1 ring-sky-500/40";
+    if (val.includes("aistudio") || val.includes("ai studio")) {
+      return "bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/40";
+    }
+    if (val.includes("antigravity")) {
+      return "bg-fuchsia-500/20 text-fuchsia-200 ring-1 ring-fuchsia-500/40";
+    }
+    if (val.includes("claude") || val.includes("anthropic")) {
+      return "bg-orange-500/20 text-orange-200 ring-1 ring-orange-500/40";
+    }
+    if (val.includes("codex") || val.includes("openai")) {
+      return "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/40";
+    }
+    if (val.includes("qwen") || val.includes("aliyun") || val.includes("dashscope")) {
+      return "bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/40";
+    }
+    if (val.includes("kimi") || val.includes("moonshot")) {
+      return "bg-rose-500/20 text-rose-200 ring-1 ring-rose-500/40";
+    }
+    if (val.includes("iflow") || val.includes("i-flow")) {
+      return "bg-lime-500/20 text-lime-200 ring-1 ring-lime-500/40";
+    }
+
+    // 兼容历史 provider
+    if (val.includes("openrouter")) return "bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/40";
+    if (val.includes("google")) return "bg-blue-500/20 text-blue-200 ring-1 ring-blue-500/40";
     if (val.includes("azure")) return "bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/40";
     if (val.includes("deepseek")) return "bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-500/40";
-    if (val.includes("xai") || val.includes("grok")) return "bg-fuchsia-500/20 text-fuchsia-200 ring-1 ring-fuchsia-500/40";
-    if (val.includes("openrouter")) return "bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/40";
-    if (val.includes("qwen") || val.includes("aliyun") || val.includes("dashscope")) {
-      return "bg-yellow-500/20 text-yellow-200 ring-1 ring-yellow-500/40";
-    }
+    if (val.includes("xai") || val.includes("grok")) return "bg-purple-500/20 text-purple-200 ring-1 ring-purple-500/40";
     return "bg-slate-700/60 text-slate-300 ring-1 ring-slate-600";
   }, []);
 

@@ -1,6 +1,8 @@
 # CHANGELOG
 
-按日期记录主要变更（简版：写“改了什么 + 作用”）。
+## 2026-02-15
+
+- 调整 `records` 页提供商染色策略：覆盖 `GeminiCLI`、`Vertex`、`AIStudio`、`Antigravity`、`Claude`、`Codex`、`Qwen`、`Kimi`、`iFlow`（大小写不敏感），提升来源识别度与颜色区分度。
 
 ## 2026-02-14
 
