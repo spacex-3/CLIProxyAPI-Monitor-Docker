@@ -822,7 +822,7 @@ export default function DashboardPage() {
     
     // 计算全局每列的最大宽度
     if (filtered.length === 0) {
-      return { filteredPrices: filtered, badgeWidths: { input: 90, cached: 90, output: 90 } };
+      return { filteredPrices: filtered, badgeWidths: { input: 98, cached: 98, output: 98 } };
     }
     
     const maxInputLen = Math.max(...filtered.map(p => String(p.inputPricePer1M).length));
@@ -832,9 +832,9 @@ export default function DashboardPage() {
     return {
       filteredPrices: filtered,
       badgeWidths: {
-        input: Math.max(90, 70 + maxInputLen * 8),
-        cached: Math.max(90, 70 + maxCachedLen * 8),
-        output: Math.max(90, 70 + maxOutputLen * 8)
+        input: Math.max(98, 76 + maxInputLen * 9),
+        cached: Math.max(98, 76 + maxCachedLen * 9),
+        output: Math.max(98, 76 + maxOutputLen * 9)
       }
     };
   }, [prices, priceSearchQuery]);
@@ -2037,20 +2037,20 @@ export default function DashboardPage() {
           <div className="lg:col-span-3">
             <div className="scrollbar-slim grid max-h-[420px] gap-3 overflow-y-auto pr-1">
               {filteredPrices.length ? filteredPrices.map((price) => (
-                <div key={price.model} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${darkMode ? "border-slate-700 bg-slate-800/50" : "border-slate-200 bg-slate-50"}`}>
+                <div key={price.model} className={`flex items-center justify-between rounded-xl border px-4 pt-3 pb-2.5 ${darkMode ? "border-slate-700 bg-slate-800/50" : "border-slate-200 bg-slate-50"}`}>
                   <div>
                     <p className={`text-base font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>{price.model}</p>
-                    <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
-                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0.5 ${darkMode ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700"}`} style={{ width: `${badgeWidths.input}px` }}>
-                        <span>输入</span>
+                    <div className="mt-1.5 grid grid-cols-3 gap-2 text-sm leading-5">
+                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0 ${darkMode ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700"}`} style={{ width: `${badgeWidths.input}px` }}>
+                        <span className="font-medium">输入</span>
                         <span className="font-semibold tabular-nums">${price.inputPricePer1M}/M</span>
                       </span>
-                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0.5 ${darkMode ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700"}`} style={{ width: `${badgeWidths.cached}px` }}>
-                        <span>缓存</span>
+                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0 ${darkMode ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700"}`} style={{ width: `${badgeWidths.cached}px` }}>
+                        <span className="font-medium">缓存</span>
                         <span className="font-semibold tabular-nums">${price.cachedInputPricePer1M}/M</span>
                       </span>
-                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0.5 ${darkMode ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`} style={{ width: `${badgeWidths.output}px` }}>
-                        <span>输出</span>
+                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0 ${darkMode ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`} style={{ width: `${badgeWidths.output}px` }}>
+                        <span className="font-medium">输出</span>
                         <span className="font-semibold tabular-nums">${price.outputPricePer1M}/M</span>
                       </span>
                     </div>

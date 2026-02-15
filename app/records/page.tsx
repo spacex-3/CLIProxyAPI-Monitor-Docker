@@ -128,7 +128,7 @@ const COLUMN_MAX_WIDTH = 420;
 const NON_FIXED_CONTENT_MIN_WIDTHS: Record<Exclude<ColumnKey, "model" | "route" | "credentialName">, number> = {
   occurredAt: 150,
   provider: 120,
-  totalTokens: 120,
+  totalTokens: 105,
   inputTokens: 96,
   outputTokens: 96,
   reasoningTokens: 96,
