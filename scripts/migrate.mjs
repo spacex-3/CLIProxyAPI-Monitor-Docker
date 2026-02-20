@@ -68,12 +68,15 @@ async function runMigrations() {
     console.log("执行数据库迁移...");
     await migrate(db, { migrationsFolder: "./drizzle" });
     console.log("✓ 迁移完成");
-    
-    process.exit(0);
   } catch (error) {
     console.error("迁移失败:", error);
-    // 不阻止构建继续
-    process.exit(0);
+    if (process.env.IGNORE_MIGRATION_ERRORS === "1") {
+      console.warn("检测到 IGNORE_MIGRATION_ERRORS=1，忽略迁移失败并继续启动。");
+      process.exit(0);
+    }
+    process.exit(1);
+  } finally {
+    await pool.end();
   }
 }
 

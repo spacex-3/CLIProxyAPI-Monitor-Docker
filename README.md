@@ -20,6 +20,8 @@
 | `POSTGRES_DB` | Docker Compose 数据库名 | 默认 `cliproxy` |
 | `POSTGRES_USER` | Docker Compose 数据库用户名 | 默认 `postgres` |
 | `POSTGRES_PASSWORD` | Docker Compose 数据库密码 | 默认 `postgres` |
+| `POSTGRES_HOST` | Docker Compose 数据库服务名（主机名） | 默认 `db` |
+| `PGDATA_DIR` | Postgres 数据目录（宿主机路径） | 默认 `./data/postgres` |
 
 ## Docker 部署（推荐：直接拉 GHCR 镜像）
 1. 复制环境变量：
@@ -33,7 +35,8 @@
 4. 打开：
    - `http://localhost:3000`
 
-说明：容器启动时会自动执行数据库迁移（`node scripts/migrate.mjs`），无需手动 `db:push`。
+说明：容器启动时会自动执行数据库迁移（`node scripts/migrate.mjs`），无需手动 `db:push`。默认会在当前目录下创建 `./data/postgres` 用于持久化数据库数据。
+注意：如果你在自己的 compose 里把数据库服务名从 `db` 改成了其他名字（例如 `cpa-monitor-db`），请同步设置 `POSTGRES_HOST`，否则应用会连错数据库主机。
 
 ## Docker 本地构建运行（可选）
 如果你要本地改代码后直接编译运行：
