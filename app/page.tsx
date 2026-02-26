@@ -23,7 +23,14 @@ const PIE_COLORS = [
 ];
 
 type OverviewMeta = { page: number; pageSize: number; totalModels: number; totalPages: number };
-type OverviewAPIResponse = { overview: UsageOverview | null; empty: boolean; days: number; meta?: OverviewMeta; filters?: { models: string[]; routes: string[] } };
+type OverviewAPIResponse = {
+  overview: UsageOverview | null;
+  empty: boolean;
+  days: number;
+  timezone?: string;
+  meta?: OverviewMeta;
+  filters?: { models: string[]; routes: string[]; names: string[] };
+};
 
 type PriceForm = {
   model: string;
@@ -33,7 +40,6 @@ type PriceForm = {
 };
 
 const hourFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Shanghai",
   month: "2-digit",
   day: "2-digit",
   hour: "2-digit",
@@ -66,15 +72,21 @@ const numericTooltipFormatter: TooltipProps<number, string>["formatter"] = (valu
   return [formatNumberWithCommas(numericValue), name];
 };
 
-function formatHourKeyFromTs(ts: number) {
-  const parts = hourFormatter.formatToParts(new Date(ts));
+function formatHourKeyFromTs(ts: number, formatter: Intl.DateTimeFormat) {
+  const parts = formatter.formatToParts(new Date(ts));
   const month = parts.find((p) => p.type === "month")?.value ?? "00";
   const day = parts.find((p) => p.type === "day")?.value ?? "00";
   const hour = parts.find((p) => p.type === "hour")?.value ?? "00";
   return `${month}-${day} ${hour}`;
 }
 
-function buildHourlySeries(series: UsageSeriesPoint[], rangeHours?: number) {
+function buildHourlySeries(series: UsageSeriesPoint[], rangeHours?: number, timezone?: string) {
+  // Use the server's bucketing timezone for gap-fill labels so they match the
+  // labels returned for real data points. Falls back to the module-level formatter
+  // (browser timezone) when no timezone is provided.
+  const gapFormatter = timezone
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: timezone, month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false })
+    : hourFormatter;
   if (!series.length) return [] as UsageSeriesPoint[];
 
   const withTs = series
@@ -98,7 +110,7 @@ function buildHourlySeries(series: UsageSeriesPoint[], rangeHours?: number) {
       filled.push(rest);
     } else {
       filled.push({
-        label: formatHourKeyFromTs(ts),
+        label: formatHourKeyFromTs(ts, gapFormatter),
         timestamp: new Date(ts).toISOString(),
         requests: 0,
         tokens: 0,
@@ -167,6 +179,7 @@ export default function DashboardPage() {
     }
   }, []);
   const [overview, setOverview] = useState<UsageOverview | null>(null);
+  const [bucketTimezone, setBucketTimezone] = useState<string | undefined>(undefined);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [overviewEmpty, setOverviewEmpty] = useState(false);
   const [loadingOverview, setLoadingOverview] = useState(true);
@@ -178,10 +191,13 @@ export default function DashboardPage() {
   const [hourRange, setHourRange] = useState<"all" | "24h" | "72h">("all");
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [routeOptions, setRouteOptions] = useState<string[]>([]);
+  const [nameOptions, setNameOptions] = useState<string[]>([]);
   const [filterModelInput, setFilterModelInput] = useState("");
   const [filterRouteInput, setFilterRouteInput] = useState("");
+  const [filterNameInput, setFilterNameInput] = useState("");
   const [filterModel, setFilterModel] = useState<string | undefined>(undefined);
   const [filterRoute, setFilterRoute] = useState<string | undefined>(undefined);
+  const [filterName, setFilterName] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [form, setForm] = useState<PriceForm>({ model: "", inputPricePer1M: "", cachedInputPricePer1M: "", outputPricePer1M: "" });
   const [status, setStatus] = useState<string | null>(null);
@@ -710,6 +726,7 @@ export default function DashboardPage() {
         }
         if (filterModel) params.set("model", filterModel);
         if (filterRoute) params.set("route", filterRoute);
+        if (filterName) params.set("name", filterName);
         params.set("page", String(page));
         params.set("pageSize", "500");
 
@@ -730,11 +747,13 @@ export default function DashboardPage() {
         const data: OverviewAPIResponse = await res.json();
         if (!active) return;
         setOverview(data.overview ?? null);
+        setBucketTimezone(data.timezone);
         setOverviewEmpty(Boolean(data.empty));
         setOverviewError(null);
         setPage(data.meta?.page ?? 1);
         setModelOptions(Array.from(new Set(data.filters?.models ?? [])));
         setRouteOptions(Array.from(new Set(data.filters?.routes ?? [])));
+        setNameOptions(Array.from(new Set(data.filters?.names ?? [])));
         setAppliedDays(data.days ?? rangeDays);
       } catch (err) {
         if (!active) return;
@@ -751,7 +770,7 @@ export default function DashboardPage() {
       active = false;
       controller.abort();
     };
-  }, [rangeMode, customStart, customEnd, rangeDays, filterModel, filterRoute, page, refreshTrigger, ready]);
+  }, [rangeMode, customStart, customEnd, rangeDays, filterModel, filterRoute, filterName, page, refreshTrigger, ready]);
 
   const overviewData = overview;
   const showEmpty = overviewEmpty || !overview;
@@ -760,11 +779,11 @@ export default function DashboardPage() {
     if (!overviewData?.byHour) return [] as UsageSeriesPoint[];
     if (hourRange === "all") return overviewData.byHour;
     const hours = hourRange === "24h" ? 24 : 72;
-    return buildHourlySeries(overviewData.byHour, hours);
-  }, [hourRange, overviewData?.byHour]);
+    return buildHourlySeries(overviewData.byHour, hours, bucketTimezone);
+  }, [hourRange, overviewData?.byHour, bucketTimezone]);
 
   const hourlyLineStyle = useMemo(
-    () => buildHourlyLineStyle(hourlySeries.length, 3),
+    () => buildHourlyLineStyle(hourlySeries.length, 2),
     [hourlySeries.length]
   );
 
@@ -803,7 +822,7 @@ export default function DashboardPage() {
     
     // 计算全局每列的最大宽度
     if (filtered.length === 0) {
-      return { filteredPrices: filtered, badgeWidths: { input: 90, cached: 90, output: 90 } };
+      return { filteredPrices: filtered, badgeWidths: { input: 98, cached: 98, output: 98 } };
     }
     
     const maxInputLen = Math.max(...filtered.map(p => String(p.inputPricePer1M).length));
@@ -813,9 +832,9 @@ export default function DashboardPage() {
     return {
       filteredPrices: filtered,
       badgeWidths: {
-        input: Math.max(90, 70 + maxInputLen * 8),
-        cached: Math.max(90, 70 + maxCachedLen * 8),
-        output: Math.max(90, 70 + maxOutputLen * 8)
+        input: Math.max(98, 76 + maxInputLen * 9),
+        cached: Math.max(98, 76 + maxCachedLen * 9),
+        output: Math.max(98, 76 + maxOutputLen * 9)
       }
     };
   }, [prices, priceSearchQuery]);
@@ -869,6 +888,7 @@ export default function DashboardPage() {
     setPage(1);
     setFilterModel(filterModelInput.trim() || undefined);
     setFilterRoute(filterRouteInput.trim() || undefined);
+    setFilterName(filterNameInput.trim() || undefined);
   };
 
   const applyModelOption = (val: string) => {
@@ -880,6 +900,12 @@ export default function DashboardPage() {
   const applyRouteOption = (val: string) => {
     setFilterRouteInput(val);
     setFilterRoute(val.trim() || undefined);
+    setPage(1);
+  };
+
+  const applyNameOption = (val: string) => {
+    setFilterNameInput(val);
+    setFilterName(val.trim() || undefined);
     setPage(1);
   };
 
@@ -1237,19 +1263,34 @@ export default function DashboardPage() {
               setPage(1);
             }}
           />
+          <ComboBox
+            value={filterNameInput}
+            onChange={setFilterNameInput}
+            options={nameOptions}
+            placeholder="按凭证过滤"
+            darkMode={darkMode}
+            onSelectOption={applyNameOption}
+            onClear={() => {
+              setFilterNameInput("");
+              setFilterName(undefined);
+              setPage(1);
+            }}
+          />
           <button
             onClick={applyFilters}
             className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${darkMode ? "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`}
           >
             应用筛选
           </button>
-          {(filterModel || filterRoute) ? (
+          {(filterModel || filterRoute || filterName) ? (
             <button
               onClick={() => {
                 setFilterModelInput("");
                 setFilterRouteInput("");
+                setFilterNameInput("");
                 setFilterModel(undefined);
                 setFilterRoute(undefined);
+                setFilterName(undefined);
                 setPage(1);
               }}
               className={`rounded-lg border px-3 py-1.5 text-sm transition ${darkMode ? "border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-500" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}
@@ -1996,20 +2037,20 @@ export default function DashboardPage() {
           <div className="lg:col-span-3">
             <div className="scrollbar-slim grid max-h-[420px] gap-3 overflow-y-auto pr-1">
               {filteredPrices.length ? filteredPrices.map((price) => (
-                <div key={price.model} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${darkMode ? "border-slate-700 bg-slate-800/50" : "border-slate-200 bg-slate-50"}`}>
+                <div key={price.model} className={`flex items-center justify-between rounded-xl border px-4 pt-3 pb-2.5 ${darkMode ? "border-slate-700 bg-slate-800/50" : "border-slate-200 bg-slate-50"}`}>
                   <div>
                     <p className={`text-base font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>{price.model}</p>
-                    <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
-                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0.5 ${darkMode ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700"}`} style={{ width: `${badgeWidths.input}px` }}>
-                        <span>输入</span>
+                    <div className="mt-1.5 grid grid-cols-3 gap-2 text-sm leading-5">
+                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0 ${darkMode ? "bg-rose-500/15 text-rose-200" : "bg-rose-100 text-rose-700"}`} style={{ width: `${badgeWidths.input}px` }}>
+                        <span className="font-medium">输入</span>
                         <span className="font-semibold tabular-nums">${price.inputPricePer1M}/M</span>
                       </span>
-                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0.5 ${darkMode ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700"}`} style={{ width: `${badgeWidths.cached}px` }}>
-                        <span>缓存</span>
+                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0 ${darkMode ? "bg-amber-500/15 text-amber-200" : "bg-amber-100 text-amber-700"}`} style={{ width: `${badgeWidths.cached}px` }}>
+                        <span className="font-medium">缓存</span>
                         <span className="font-semibold tabular-nums">${price.cachedInputPricePer1M}/M</span>
                       </span>
-                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0.5 ${darkMode ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`} style={{ width: `${badgeWidths.output}px` }}>
-                        <span>输出</span>
+                      <span className={`inline-flex items-center justify-between rounded-full px-2 py-0 ${darkMode ? "bg-emerald-500/15 text-emerald-200" : "bg-emerald-100 text-emerald-700"}`} style={{ width: `${badgeWidths.output}px` }}>
+                        <span className="font-medium">输出</span>
                         <span className="font-semibold tabular-nums">${price.outputPricePer1M}/M</span>
                       </span>
                     </div>
@@ -2891,7 +2932,7 @@ function ComboBox({
       {isVisible && filtered.length > 0 ? (
         <div
           className={`absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-xl border shadow-lg scrollbar-slim ${
-            darkMode ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"
+            darkMode ? "border-slate-600/60 bg-slate-900/70 backdrop-blur-sm" : "border-slate-200/80 bg-white/80 backdrop-blur-sm"
           } ${isClosing ? "animate-dropdown-out" : "animate-dropdown-in"}`}
         >
           {filtered.map((opt) => (

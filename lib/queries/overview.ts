@@ -1,7 +1,7 @@
 import { and, eq, sql, gte, lte, desc } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { modelPrices, usageRecords } from "@/lib/db/schema";
+import { authFileMappings, modelPrices, usageRecords } from "@/lib/db/schema";
 import type { UsageOverview, ModelUsage, UsageSeriesPoint } from "@/lib/types";
 import { estimateCost, priceMap } from "@/lib/usage";
 
@@ -84,8 +84,8 @@ function normalizePageSize(value?: number | null) {
 
 export async function getOverview(
   daysInput?: number,
-  opts?: { model?: string | null; route?: string | null; page?: number | null; pageSize?: number | null; start?: string | Date | null; end?: string | Date | null }
-): Promise<{ overview: UsageOverview; empty: boolean; days: number; meta: OverviewMeta; filters: { models: string[]; routes: string[] } }> {
+  opts?: { model?: string | null; route?: string | null; source?: string | null; name?: string | null; page?: number | null; pageSize?: number | null; start?: string | Date | null; end?: string | Date | null; timezone?: string | null }
+): Promise<{ overview: UsageOverview; empty: boolean; days: number; meta: OverviewMeta; filters: { models: string[]; routes: string[]; sources: string[]; names: string[] }; timezone: string }> {
   const startDate = parseDateInput(opts?.start);
   const endDate = parseDateInput(opts?.end);
   const hasCustomRange = startDate && endDate && endDate >= startDate;
@@ -104,10 +104,27 @@ export async function getOverview(
   const filterWhereParts: SQL[] = [...baseWhereParts];
   if (opts?.model) filterWhereParts.push(eq(usageRecords.model, opts.model));
   if (opts?.route) filterWhereParts.push(eq(usageRecords.route, opts.route));
+  if (opts?.source) filterWhereParts.push(eq(usageRecords.source, opts.source));
+  if (opts?.name) {
+    filterWhereParts.push(
+      sql`coalesce(
+        nullif((select af.name from auth_file_mappings af where af.auth_id = ${usageRecords.authIndex} limit 1), ''),
+        nullif(${usageRecords.source}, ''),
+        '-'
+      ) = ${opts.name}`
+    );
+  }
   const filterWhere = filterWhereParts.length ? and(...filterWhereParts) : undefined;
 
-  const dayExpr = sql`date_trunc('day', ${usageRecords.occurredAt} at time zone 'Asia/Shanghai')`;
-  const hourExpr = sql`date_trunc('hour', ${usageRecords.occurredAt} at time zone 'Asia/Shanghai')`;
+  const tz = opts?.timezone || "Asia/Shanghai";
+  // Use sql.raw() so the timezone is embedded as a SQL literal rather than a query
+  // parameter. PostgreSQL requires the GROUP BY expression to be textually identical
+  // to the SELECT expression; different parameter indices ($1 vs $3) would cause a
+  // "must appear in GROUP BY" error even when the values are equal.
+  const tzLiteral = sql.raw(`'${tz}'`);
+  const dayExpr = sql`date_trunc('day', ${usageRecords.occurredAt} at time zone ${tzLiteral})`;
+  const hourExpr = sql`date_trunc('hour', ${usageRecords.occurredAt} at time zone ${tzLiteral})`;
+  const credentialNameExpr = sql<string>`coalesce(nullif(${authFileMappings.name}, ''), nullif(${usageRecords.source}, ''), '-')`;
 
   const totalsPromise: Promise<TotalsRow[]> = db
     .select({
@@ -177,7 +194,7 @@ export async function getOverview(
   const byHourPromise: Promise<HourAggRow[]> = db
     .select({
       label: sql<string>`to_char(${hourExpr}, 'MM-DD HH24')`,
-      hourStart: sql<Date>`(${hourExpr}) at time zone 'Asia/Shanghai'`,
+      hourStart: sql<Date>`(${hourExpr}) at time zone ${tzLiteral}`,
       requests: sql<number>`count(*)`,
       tokens: sql<number>`sum(${usageRecords.totalTokens})`,
       inputTokens: sql<number>`sum(${usageRecords.inputTokens})`,
@@ -204,6 +221,21 @@ export async function getOverview(
     .groupBy(usageRecords.route)
     .orderBy(usageRecords.route);
 
+  const availableSourcesPromise: Promise<{ source: string }[]> = db
+    .select({ source: usageRecords.source })
+    .from(usageRecords)
+    .where(baseWhere)
+    .groupBy(usageRecords.source)
+    .orderBy(usageRecords.source);
+
+  const availableNamesPromise: Promise<{ name: string | null }[]> = db
+    .select({ name: credentialNameExpr })
+    .from(usageRecords)
+    .leftJoin(authFileMappings, eq(usageRecords.authIndex, authFileMappings.authId))
+    .where(baseWhere)
+    .groupBy(credentialNameExpr)
+    .orderBy(credentialNameExpr);
+
   const [
     totalsRowResult,
     priceRows,
@@ -213,7 +245,9 @@ export async function getOverview(
     byDayModelRows,
     byHourRows,
     availableModelsRows,
-    availableRoutesRows
+    availableRoutesRows,
+    availableSourcesRows,
+    availableNamesRows
   ] = await Promise.all([
     totalsPromise,
     pricePromise,
@@ -223,7 +257,9 @@ export async function getOverview(
     byDayModelPromise,
     byHourPromise,
     availableModelsPromise,
-    availableRoutesPromise
+    availableRoutesPromise,
+    availableSourcesPromise,
+    availableNamesPromise
   ]);
 
   const totalsRow =
@@ -324,7 +360,9 @@ export async function getOverview(
 
   const filters = {
     models: availableModelsRows.map((r) => r.model).filter(Boolean),
-    routes: availableRoutesRows.map((r) => r.route).filter(Boolean)
+    routes: availableRoutesRows.map((r) => r.route).filter(Boolean),
+    sources: availableSourcesRows.map((r) => r.source).filter(Boolean),
+    names: availableNamesRows.map((r) => r.name).filter((name): name is string => Boolean(name) && name !== "-")
   };
 
   return {
@@ -332,6 +370,7 @@ export async function getOverview(
     empty: totalRequests === 0,
     days,
     meta: { page, pageSize, totalModels, totalPages },
-    filters
+    filters,
+    timezone: tz
   };
 }

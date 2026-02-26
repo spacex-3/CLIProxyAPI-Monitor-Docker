@@ -13,13 +13,8 @@ const tokensSchema = z.object({
 const detailSchema = z.object({
   timestamp: z.string().optional(),
   source: z.string().optional(),
-  // auth_index may arrive as non-numeric string; drop invalid values instead of failing parse
-  auth_index: z
-    .preprocess((value) => {
-      if (value === undefined || value === null) return undefined;
-      const num = Number(value);
-      return Number.isNaN(num) ? undefined : num;
-    }, z.number().optional()),
+  // 保留 auth_index 原值（字符串或数字），避免历史/异构格式被丢弃
+  auth_index: z.union([z.string(), z.number()]).optional(),
   tokens: tokensSchema.optional(),
   failed: z.boolean().optional(),
   // 兼容旧格式
@@ -76,6 +71,16 @@ function parseDetailTimestamp(detail: z.infer<typeof detailSchema>, fallback: Da
   return Number.isFinite(date.getTime()) ? date : fallback;
 }
 
+function parseDetailSource(detail: z.infer<typeof detailSchema>) {
+  return detail.source?.trim() ?? "";
+}
+
+function parseDetailAuthIndex(detail: z.infer<typeof detailSchema>) {
+  if (detail.auth_index === undefined || detail.auth_index === null) return null;
+  const value = String(detail.auth_index).trim();
+  return value.length > 0 ? value : null;
+}
+
 function isDetailSuccess(detail: z.infer<typeof detailSchema>) {
   // failed=true 表示失败，success=false 表示失败，其余视为成功
   if (detail.failed === true) return false;
@@ -109,6 +114,8 @@ export function toUsageRecords(payload: UsageResponse, pulledAt: Date = new Date
             occurredAt,
             syncedAt: pulledAt,
             route,
+            source: parseDetailSource(detail),
+            authIndex: parseDetailAuthIndex(detail),
             model,
             totalTokens: tokenSlice.totalTokens,
             inputTokens: tokenSlice.inputTokens,
