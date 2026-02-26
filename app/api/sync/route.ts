@@ -3,13 +3,16 @@ import { cookies } from "next/headers";
 import { eq, sql } from "drizzle-orm";
 import { config, assertEnv } from "@/lib/config";
 import { db } from "@/lib/db/client";
-import { usageRecords } from "@/lib/db/schema";
+import { authFileMappings, usageRecords } from "@/lib/db/schema";
+import { toAuthFileMappings } from "@/lib/auth-files";
 import { parseUsagePayload, toUsageRecords } from "@/lib/usage";
 
 export const runtime = "nodejs";
 
 const PASSWORD = process.env.PASSWORD || process.env.CLIPROXY_SECRET_KEY || "";
 const COOKIE_NAME = "dashboard_auth";
+const AUTH_FILES_TIMEOUT_MS = 15_000;
+const USAGE_TIMEOUT_MS = 60_000;
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,6 +20,20 @@ function unauthorized() {
 
 function missingPassword() {
   return NextResponse.json({ error: "PASSWORD is missing" }, { status: 501 });
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function hashPassword(value: string) {
@@ -47,6 +64,44 @@ async function isAuthorized(request: Request) {
   return false;
 }
 
+async function syncAuthFileMappings(pulledAt: Date) {
+  const authFilesUrl = `${config.cliproxy.baseUrl.replace(/\/$/, "")}/auth-files`;
+
+  const response = await fetchWithTimeout(authFilesUrl, {
+    headers: {
+      Authorization: `Bearer ${config.cliproxy.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    cache: "no-store"
+  }, AUTH_FILES_TIMEOUT_MS);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch auth-files: ${response.status} ${response.statusText}`);
+  }
+
+  const json = await response.json();
+  const rows = toAuthFileMappings(json, pulledAt);
+  if (rows.length === 0) return 0;
+
+  await db
+    .insert(authFileMappings)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: authFileMappings.authId,
+      set: {
+        name: sql`coalesce(nullif(excluded.name, ''), ${authFileMappings.name})`,
+        label: sql`coalesce(nullif(excluded.label, ''), ${authFileMappings.label})`,
+        provider: sql`coalesce(nullif(excluded.provider, ''), ${authFileMappings.provider})`,
+        source: sql`coalesce(nullif(excluded.source, ''), ${authFileMappings.source})`,
+        email: sql`coalesce(nullif(excluded.email, ''), ${authFileMappings.email})`,
+        updatedAt: sql`coalesce(excluded.updated_at, ${authFileMappings.updatedAt})`,
+        syncedAt: pulledAt
+      }
+    });
+
+  return rows.length;
+}
+
 async function performSync(request: Request) {
   if (!config.password && !config.cronSecret && !PASSWORD) return missingPassword();
   if (!(await isAuthorized(request))) return unauthorized();
@@ -60,13 +115,29 @@ async function performSync(request: Request) {
   const usageUrl = `${config.cliproxy.baseUrl.replace(/\/$/, "")}/usage`;
   const pulledAt = new Date();
 
-  const response = await fetch(usageUrl, {
-    headers: {
-      Authorization: `Bearer ${config.cliproxy.apiKey}`,
-      "Content-Type": "application/json"
-    },
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(usageUrl, {
+      headers: {
+        Authorization: `Bearer ${config.cliproxy.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      cache: "no-store"
+    }, USAGE_TIMEOUT_MS);
+  } catch (error) {
+    const isTimeout = error instanceof Error && error.name === "AbortError";
+    console.warn("[sync] usage fetch failed", {
+      reason: isTimeout ? "timeout" : "error",
+      isTimeout,
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return NextResponse.json(
+      {
+        error: isTimeout ? "Upstream usage request timed out" : "Failed to fetch usage"
+      },
+      { status: isTimeout ? 504 : 502 }
+    );
+  }
 
   if (!response.ok) {
     return NextResponse.json(
@@ -89,8 +160,24 @@ async function performSync(request: Request) {
 
   const rows = toUsageRecords(payload, pulledAt);
 
+  let authFilesSynced = 0;
+  let authFilesWarning: string | undefined;
+  try {
+    authFilesSynced = await syncAuthFileMappings(pulledAt);
+  } catch (error) {
+    const isTimeout = error instanceof Error && error.name === "AbortError";
+    authFilesWarning = isTimeout ? "auth-files sync timed out" : "auth-files sync failed";
+    console.warn("/api/sync auth-files sync failed:", error);
+  }
+
   if (rows.length === 0) {
-    return NextResponse.json({ status: "ok", inserted: 0, message: "No usage data" });
+    return NextResponse.json({
+      status: "ok",
+      inserted: 0,
+      message: "No usage data",
+      authFilesSynced,
+      ...(authFilesWarning ? { authFilesWarning } : {})
+    });
   }
 
   let insertedRows: Array<{ id: number }>;
@@ -98,7 +185,7 @@ async function performSync(request: Request) {
     insertedRows = await db
       .insert(usageRecords)
       .values(rows)
-      .onConflictDoNothing({ target: [usageRecords.occurredAt, usageRecords.route, usageRecords.model] })
+      .onConflictDoNothing({ target: [usageRecords.occurredAt, usageRecords.route, usageRecords.model, usageRecords.source] })
       .returning({ id: usageRecords.id });
   } catch (dbError) {
     console.error("/api/sync database insert failed:", dbError);
@@ -119,7 +206,13 @@ async function performSync(request: Request) {
     inserted = Number(fallback?.[0]?.count ?? 0);
   }
 
-  return NextResponse.json({ status: "ok", inserted, attempted: rows.length });
+  return NextResponse.json({
+    status: "ok",
+    inserted,
+    attempted: rows.length,
+    authFilesSynced,
+    ...(authFilesWarning ? { authFilesWarning } : {})
+  });
 }
 
 export async function POST(request: Request) {

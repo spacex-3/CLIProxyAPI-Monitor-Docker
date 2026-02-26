@@ -12,6 +12,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@${POSTGRES_HOST:-db}:5432/${POSTGRES_DB:-cliproxy}
       PASSWORD: ${PASSWORD:-}
       CRON_SECRET: ${CRON_SECRET:-}
+      TIMEZONE: ${TIMEZONE:-Asia/Shanghai}
     depends_on:
       db:
         condition: service_healthy
