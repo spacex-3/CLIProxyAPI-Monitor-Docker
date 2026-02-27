@@ -92,7 +92,12 @@ export function parseUsagePayload(json: unknown): UsageResponse {
   return responseSchema.parse(json);
 }
 
-export function toUsageRecords(payload: UsageResponse, pulledAt: Date = new Date()): UsageRecordInsert[] {
+export function toUsageRecords(
+  payload: UsageResponse,
+  pulledAt: Date = new Date(),
+  authMap?: Map<string, string>,
+  apiKeyMap?: Map<string, string>
+): UsageRecordInsert[] {
   const apis = payload.usage?.apis as Record<string, ApiParsed> | undefined;
   if (!apis) return [];
 
@@ -109,14 +114,26 @@ export function toUsageRecords(payload: UsageResponse, pulledAt: Date = new Date
           const tokenSlice = parseDetailTokens(detail);
           const occurredAt = parseDetailTimestamp(detail, pulledAt);
           const success = isDetailSuccess(detail);
+          const authIdx = parseDetailAuthIndex(detail);
+          const source = parseDetailSource(detail);
+          let channel: string | undefined = authIdx && authMap?.get(authIdx)
+            ? authMap.get(authIdx)
+            : undefined;
+          if (!channel && source && apiKeyMap?.get(source)) {
+            channel = apiKeyMap.get(source);
+          }
+          if (!channel) {
+            channel = authIdx ?? undefined;
+          }
 
           rows.push({
             occurredAt,
             syncedAt: pulledAt,
             route,
-            source: parseDetailSource(detail),
-            authIndex: parseDetailAuthIndex(detail),
+            source,
+            authIndex: authIdx,
             model,
+            channel: channel ?? null,
             totalTokens: tokenSlice.totalTokens,
             inputTokens: tokenSlice.inputTokens,
             outputTokens: tokenSlice.outputTokens,

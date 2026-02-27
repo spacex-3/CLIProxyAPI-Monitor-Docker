@@ -18,6 +18,7 @@ export const usageRecords = pgTable(
     route: text("route").notNull(),
     source: text("source").notNull().default(""),
     authIndex: text("auth_index"),
+    channel: text("channel"),
     model: text("model").notNull(),
     totalTokens: integer("total_tokens").notNull(),
     inputTokens: integer("input_tokens").notNull(),

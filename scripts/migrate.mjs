@@ -54,14 +54,33 @@ async function runMigrations() {
     if (tableExists.rows.length > 0) {
       // 找出 0000 迁移
       const initialMigration = allMigrations.find((m) => m.tag.startsWith("0000_"));
-      
+
       if (initialMigration && !existingHashes.has(initialMigration.hash)) {
         console.log("检测到表已存在但迁移未标记，正在标记...");
         await pool.query(
           "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)",
           [initialMigration.hash, initialMigration.createdAt]
         );
+        existingHashes.add(initialMigration.hash);
         console.log("✓ 已标记 0000 迁移");
+      }
+
+      // 检查 0001 迁移（DROP total_requests/success_count/failure_count）
+      // 如果这些列已不存在，说明 0001 已在结构上生效，需要标记
+      const migration0001 = allMigrations.find((m) => m.tag.startsWith("0001_"));
+      if (migration0001 && !existingHashes.has(migration0001.hash)) {
+        const columnsResult = await pool.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name = 'usage_records' AND column_name IN ('total_requests', 'success_count', 'failure_count')"
+        );
+        if (columnsResult.rows.length === 0) {
+          console.log("检测到 0001 迁移已在结构上生效但未标记，正在标记...");
+          await pool.query(
+            "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)",
+            [migration0001.hash, migration0001.createdAt]
+          );
+          existingHashes.add(migration0001.hash);
+          console.log("✓ 已标记 0001 迁移");
+        }
       }
     }
 
