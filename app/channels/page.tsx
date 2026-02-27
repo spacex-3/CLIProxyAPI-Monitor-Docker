@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { formatCurrency, formatNumberWithCommas } from "@/lib/utils";
-import { Activity, RefreshCw, ChevronDown, ChevronRight, Key, Users } from "lucide-react";
+import { Activity, RefreshCw, ChevronDown, ChevronRight, Key, Users, ArrowUpDown } from "lucide-react";
 
 type ChannelStat = {
   channel: string;
@@ -162,7 +162,8 @@ export default function ChannelsPage() {
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState(14);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [sortBy, setSortBy] = useState<"requests" | "totalTokens" | "cost">("requests");
+  const [sortBy, setSortBy] = useState<"requests" | "totalTokens" | "cost" | "successRate">("requests");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
 
   const fetchChannels = useCallback(async () => {
     setLoading(true);
@@ -194,8 +195,15 @@ export default function ChannelsPage() {
 
   const groups = useMemo(() => {
     const g = groupChannels(channels);
-    return g.sort((a, b) => b.total[sortBy] - a.total[sortBy]);
-  }, [channels, sortBy]);
+    const metric = (x: ChannelGroup) => {
+      if (sortBy === "successRate") {
+        if (x.total.requests === 0) return 0;
+        return (x.total.requests - x.total.errorCount) / x.total.requests;
+      }
+      return x.total[sortBy];
+    };
+    return g.sort((a, b) => (sortDir === "desc" ? metric(b) - metric(a) : metric(a) - metric(b)));
+  }, [channels, sortBy, sortDir]);
 
   const totalStats = useMemo(() => aggregateStats(channels), [channels]);
 
@@ -302,15 +310,35 @@ export default function ChannelsPage() {
 
       {/* Column Headers */}
       {!loading && channels.length > 0 && (
-        <div className="mt-4 hidden sm:flex items-center gap-3 px-5 py-1 text-xs uppercase tracking-wide text-slate-500">
+        <div className="mt-4 hidden sm:flex items-center gap-3 px-5 py-2 text-xs uppercase tracking-wide text-slate-500 font-semibold border-b border-slate-800">
           <div className={COL.arrow} />
           <div className={COL.icon} />
-          <div className="flex-1 min-w-0" />
+          <div className="flex-1 min-w-0">渠道名称</div>
           <div className="flex items-center gap-3">
-            <div className={COL.requests}>请求</div>
-            <div className={COL.tokens}>Tokens</div>
-            <div className={COL.cost}>费用</div>
-            <div className={COL.rate}>成功率</div>
+            <button 
+              onClick={() => { setSortBy("requests"); setSortDir(sortBy === "requests" && sortDir === "desc" ? "asc" : "desc"); }}
+              className={`${COL.requests} hover:text-slate-300 flex items-center justify-end gap-1`}
+            >
+              请求 <ArrowUpDown className={`h-3 w-3 ${sortBy === "requests" ? "text-indigo-400" : ""}`} />
+            </button>
+            <button 
+              onClick={() => { setSortBy("totalTokens"); setSortDir(sortBy === "totalTokens" && sortDir === "desc" ? "asc" : "desc"); }}
+              className={`${COL.tokens} hover:text-slate-300 flex items-center justify-end gap-1`}
+            >
+              Tokens <ArrowUpDown className={`h-3 w-3 ${sortBy === "totalTokens" ? "text-indigo-400" : ""}`} />
+            </button>
+            <button 
+              onClick={() => { setSortBy("cost"); setSortDir(sortBy === "cost" && sortDir === "desc" ? "asc" : "desc"); }}
+              className={`${COL.cost} hover:text-slate-300 flex items-center justify-end gap-1`}
+            >
+              费用 <ArrowUpDown className={`h-3 w-3 ${sortBy === "cost" ? "text-indigo-400" : ""}`} />
+            </button>
+            <button 
+              onClick={() => { setSortBy("successRate"); setSortDir(sortBy === "successRate" && sortDir === "desc" ? "asc" : "desc"); }}
+              className={`${COL.rate} hover:text-slate-300 flex items-center justify-end gap-1`}
+            >
+              成功率 <ArrowUpDown className={`h-3 w-3 ${sortBy === "successRate" ? "text-indigo-400" : ""}`} />
+            </button>
           </div>
         </div>
       )}

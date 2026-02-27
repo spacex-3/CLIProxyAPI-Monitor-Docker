@@ -26,6 +26,27 @@ type ChannelModelAggRow = {
   cachedTokens: number;
 };
 
+type ChannelGroupedRow = {
+  channel_group: string;
+  requests: number;
+  tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cached_tokens: number;
+  error_count: number;
+};
+
+type ChannelModelGroupedRow = {
+  channel_group: string;
+  model: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cached_tokens: number;
+};
+
 type PriceRow = typeof modelPrices.$inferSelect;
 
 function toNumber(value: unknown): number {
@@ -74,37 +95,76 @@ export async function GET(request: Request) {
   const whereClause = whereParts.length ? and(...whereParts) : undefined;
 
   try {
-    // Fetch aggregated channel statistics
-    const channelAggRows: ChannelAggRow[] = await db
+    const channelGroupExpr = sql<string>`
+      CASE
+        -- codex-plus first (explicit account mapping)
+        WHEN lower(coalesce(${usageRecords.source}, '')) IN ('leekayson33@gmail.com','fantasysk33@gmail.com','fantasysk3@gmail.com') THEN 'codex-plus'
+        WHEN lower(coalesce(${usageRecords.channel}, '')) IN ('leekayson33@gmail.com','fantasysk33@gmail.com','fantasysk3@gmail.com') THEN 'codex-plus'
+        WHEN lower(coalesce(${usageRecords.source}, '')) LIKE '%codex%' AND lower(coalesce(${usageRecords.source}, '')) LIKE '%plus%' THEN 'codex-plus'
+        WHEN lower(coalesce(${usageRecords.channel}, '')) LIKE '%codex%' AND lower(coalesce(${usageRecords.channel}, '')) LIKE '%plus%' THEN 'codex-plus'
+
+        -- gemini
+        WHEN lower(coalesce(${usageRecords.source}, '')) LIKE '%gemini%' THEN 'gemini'
+        WHEN lower(coalesce(${usageRecords.channel}, '')) LIKE '%gemini%' THEN 'gemini'
+
+        -- iflow (explicit phone mapping + keyword)
+        WHEN coalesce(${usageRecords.source}, '') IN ('156****0707','189****0038') THEN 'iflow'
+        WHEN lower(coalesce(${usageRecords.source}, '')) LIKE '%iflow%' THEN 'iflow'
+        WHEN lower(coalesce(${usageRecords.channel}, '')) LIKE '%iflow%' THEN 'iflow'
+
+        -- nvidia
+        WHEN lower(coalesce(${usageRecords.source}, '')) LIKE 'nvapi-%' THEN 'nvidia'
+        WHEN lower(coalesce(${usageRecords.source}, '')) LIKE '%nvidia%' THEN 'nvidia'
+        WHEN lower(coalesce(${usageRecords.channel}, '')) LIKE '%nvidia%' THEN 'nvidia'
+
+        -- antigravity
+        WHEN lower(coalesce(${usageRecords.source}, '')) LIKE '%antigravity%' THEN 'antigravity'
+        WHEN lower(coalesce(${usageRecords.channel}, '')) LIKE '%antigravity%' THEN 'antigravity'
+
+        -- codex (keyword + generic account-like fallback)
+        WHEN lower(coalesce(${usageRecords.source}, '')) LIKE '%codex%' THEN 'codex'
+        WHEN lower(coalesce(${usageRecords.channel}, '')) LIKE '%codex%' THEN 'codex'
+        WHEN coalesce(${usageRecords.source}, '') LIKE '%@%' THEN 'codex'
+        WHEN coalesce(${usageRecords.channel}, '') LIKE '%@%' THEN 'codex'
+
+        -- fallback buckets
+        WHEN coalesce(${usageRecords.channel}, '') ~ '^[0-9a-f]{8,}$' THEN 'unknown'
+        WHEN coalesce(${usageRecords.source}, '') ~ '^[0-9a-f]{8,}$' THEN 'unknown'
+        ELSE coalesce(nullif(${usageRecords.channel}, ''), nullif(${usageRecords.source}, ''), 'unknown')
+      END
+    `;
+
+    // Fetch aggregated channel statistics (grouped)
+    const channelAggRows: ChannelGroupedRow[] = await db
       .select({
-        channel: usageRecords.channel,
+        channel_group: channelGroupExpr,
         requests: sql<number>`count(*)`,
         tokens: sql<number>`sum(${usageRecords.totalTokens})`,
-        inputTokens: sql<number>`sum(${usageRecords.inputTokens})`,
-        outputTokens: sql<number>`sum(${usageRecords.outputTokens})`,
-        reasoningTokens: sql<number>`coalesce(sum(${usageRecords.reasoningTokens}), 0)`,
-        cachedTokens: sql<number>`coalesce(sum(${usageRecords.cachedTokens}), 0)`,
-        errorCount: sql<number>`sum(case when ${usageRecords.isError} then 1 else 0 end)`
+        input_tokens: sql<number>`sum(${usageRecords.inputTokens})`,
+        output_tokens: sql<number>`sum(${usageRecords.outputTokens})`,
+        reasoning_tokens: sql<number>`coalesce(sum(${usageRecords.reasoningTokens}), 0)`,
+        cached_tokens: sql<number>`coalesce(sum(${usageRecords.cachedTokens}), 0)`,
+        error_count: sql<number>`sum(case when ${usageRecords.isError} then 1 else 0 end)`
       })
       .from(usageRecords)
       .where(whereClause)
-      .groupBy(usageRecords.channel)
+      .groupBy(channelGroupExpr)
       .orderBy(sql`count(*) desc`);
 
-    // Fetch channel-model breakdown for cost calculation
-    const channelModelAggRows: ChannelModelAggRow[] = await db
+    // Fetch channel-model breakdown for cost calculation (grouped)
+    const channelModelAggRows: ChannelModelGroupedRow[] = await db
       .select({
-        channel: usageRecords.channel,
+        channel_group: channelGroupExpr,
         model: usageRecords.model,
         requests: sql<number>`count(*)`,
-        inputTokens: sql<number>`sum(${usageRecords.inputTokens})`,
-        outputTokens: sql<number>`sum(${usageRecords.outputTokens})`,
-        reasoningTokens: sql<number>`coalesce(sum(${usageRecords.reasoningTokens}), 0)`,
-        cachedTokens: sql<number>`coalesce(sum(${usageRecords.cachedTokens}), 0)`
+        input_tokens: sql<number>`sum(${usageRecords.inputTokens})`,
+        output_tokens: sql<number>`sum(${usageRecords.outputTokens})`,
+        reasoning_tokens: sql<number>`coalesce(sum(${usageRecords.reasoningTokens}), 0)`,
+        cached_tokens: sql<number>`coalesce(sum(${usageRecords.cachedTokens}), 0)`
       })
       .from(usageRecords)
       .where(whereClause)
-      .groupBy(usageRecords.channel, usageRecords.model);
+      .groupBy(channelGroupExpr, usageRecords.model);
 
     // Fetch pricing information
     const priceRows: PriceRow[] = await db.select().from(modelPrices);
@@ -117,16 +177,16 @@ export async function GET(request: Request) {
       }))
     );
 
-    // Calculate costs per channel
+    // Calculate costs per channel group
     const channelCostMap = new Map<string, number>();
     for (const row of channelModelAggRows) {
-      const channelKey = row.channel ?? "未知渠道";
+      const channelKey = row.channel_group || "unknown";
       const cost = estimateCost(
         {
-          inputTokens: toNumber(row.inputTokens),
-          cachedTokens: toNumber(row.cachedTokens),
-          outputTokens: toNumber(row.outputTokens),
-          reasoningTokens: toNumber(row.reasoningTokens)
+          inputTokens: toNumber(row.input_tokens),
+          cachedTokens: toNumber(row.cached_tokens),
+          outputTokens: toNumber(row.output_tokens),
+          reasoningTokens: toNumber(row.reasoning_tokens)
         },
         row.model,
         prices
@@ -136,16 +196,16 @@ export async function GET(request: Request) {
 
     // Build response
     const channels = channelAggRows.map((row) => {
-      const channelKey = row.channel ?? "未知渠道";
+      const channelKey = row.channel_group || "unknown";
       return {
         channel: channelKey,
         requests: toNumber(row.requests),
         totalTokens: toNumber(row.tokens),
-        inputTokens: toNumber(row.inputTokens),
-        outputTokens: toNumber(row.outputTokens),
-        reasoningTokens: toNumber(row.reasoningTokens),
-        cachedTokens: toNumber(row.cachedTokens),
-        errorCount: toNumber(row.errorCount),
+        inputTokens: toNumber(row.input_tokens),
+        outputTokens: toNumber(row.output_tokens),
+        reasoningTokens: toNumber(row.reasoning_tokens),
+        cachedTokens: toNumber(row.cached_tokens),
+        errorCount: toNumber(row.error_count),
         cost: Number((channelCostMap.get(channelKey) ?? 0).toFixed(4))
       };
     });
