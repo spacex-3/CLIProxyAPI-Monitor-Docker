@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { eq, sql } from "drizzle-orm";
@@ -14,6 +15,15 @@ const COOKIE_NAME = "dashboard_auth";
 const AUTH_FILES_TIMEOUT_MS = 15_000;
 const USAGE_TIMEOUT_MS = 60_000;
 const INSERT_BATCH_SIZE = 500;
+
+function safeIndexText(value: string, fallbackSeed: string, maxLen = 180) {
+  if (!value) return fallbackSeed;
+  const v = String(value).trim();
+  if (v.length <= maxLen) return v;
+  const hash = createHash("sha256").update(v).digest("hex").slice(0, 16);
+  return `${fallbackSeed}:${hash}`;
+}
+
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -273,7 +283,12 @@ async function performSync(request: Request) {
     fetchApiKeyChannelMapping()
   ]);
 
-  const rows = toUsageRecords(payload, pulledAt, authMap, apiKeyMap);
+  const rows = toUsageRecords(payload, pulledAt, authMap, apiKeyMap).map((r) => ({
+    ...r,
+    route: safeIndexText(String(r.route ?? ""), "route"),
+    model: safeIndexText(String(r.model ?? ""), "model"),
+    source: safeIndexText(String(r.source ?? ""), `src-${String(r.authIndex ?? "na")}`)
+  }));
 
   let authFilesSynced = 0;
   let authFilesWarning: string | undefined;
