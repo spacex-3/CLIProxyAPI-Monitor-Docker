@@ -159,6 +159,7 @@ const COL = {
 export default function ChannelsPage() {
   const [channels, setChannels] = useState<ChannelStat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState(14);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -179,6 +180,25 @@ export default function ChannelsPage() {
       setLoading(false);
     }
   }, [days]);
+
+  const syncAndRefresh = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sync", { method: "GET", cache: "no-store" });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `同步失败: ${res.status}`);
+      }
+      await fetchChannels();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "同步失败");
+    } finally {
+      setSyncing(false);
+    }
+  }, [syncing, fetchChannels]);
+
 
   useEffect(() => {
     fetchChannels();
@@ -219,16 +239,16 @@ export default function ChannelsPage() {
           <p className="text-base text-slate-400">按认证渠道查看用量和费用统计</p>
         </div>
         <button
-          onClick={fetchChannels}
-          disabled={loading}
+          onClick={syncAndRefresh}
+          disabled={loading || syncing}
           className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-            loading
+            loading || syncing
               ? "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500"
               : "border-indigo-500/50 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30"
           }`}
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "加载中..." : "刷新数据"}
+          <RefreshCw className={`h-4 w-4 ${loading || syncing ? "animate-spin" : ""}`} />
+          {syncing ? "同步中..." : loading ? "加载中..." : "刷新数据"}
         </button>
       </header>
 
