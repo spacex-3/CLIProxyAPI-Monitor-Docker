@@ -13,6 +13,7 @@ const PASSWORD = process.env.PASSWORD || process.env.CLIPROXY_SECRET_KEY || "";
 const COOKIE_NAME = "dashboard_auth";
 const AUTH_FILES_TIMEOUT_MS = 15_000;
 const USAGE_TIMEOUT_MS = 60_000;
+const INSERT_BATCH_SIZE = 500;
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -294,13 +295,17 @@ async function performSync(request: Request) {
     });
   }
 
-  let insertedRows: Array<{ id: number }>;
+  let inserted = 0;
   try {
-    insertedRows = await db
-      .insert(usageRecords)
-      .values(rows)
-      .onConflictDoNothing({ target: [usageRecords.occurredAt, usageRecords.route, usageRecords.model, usageRecords.source] })
-      .returning({ id: usageRecords.id });
+    for (let i = 0; i < rows.length; i += INSERT_BATCH_SIZE) {
+      const batch = rows.slice(i, i + INSERT_BATCH_SIZE);
+      const insertedRows = await db
+        .insert(usageRecords)
+        .values(batch)
+        .onConflictDoNothing({ target: [usageRecords.occurredAt, usageRecords.route, usageRecords.model, usageRecords.source] })
+        .returning({ id: usageRecords.id });
+      inserted += insertedRows.length;
+    }
   } catch (dbError) {
     console.error("/api/sync database insert failed:", dbError);
     return NextResponse.json(
@@ -311,7 +316,6 @@ async function performSync(request: Request) {
 
   // Vercel Postgres may return an empty array even when rows are inserted with RETURNING + ON CONFLICT DO NOTHING.
   // Fall back to counting rows synced in this run (identified by the shared pulledAt timestamp) to avoid reporting 0.
-  let inserted = insertedRows.length;
   if (inserted === 0 && rows.length > 0) {
     const fallback = await db
       .select({ count: sql<number>`count(*)` })

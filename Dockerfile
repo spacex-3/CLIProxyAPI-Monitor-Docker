@@ -12,7 +12,7 @@ ENV DATABASE_URL=${DATABASE_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN mkdir -p public
-RUN pnpm run build
+RUN node_modules/.bin/next build
 
 FROM base AS runner
 ENV NODE_ENV=production
@@ -29,4 +29,4 @@ COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 EXPOSE 3000
-CMD ["pnpm", "start"]
+CMD ["sh", "-c", "node scripts/migrate.mjs && node_modules/.bin/next start"]

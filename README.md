@@ -78,3 +78,17 @@
 | <img width="2186" height="1114" alt="image" src="https://github.com/user-attachments/assets/939424fb-1caa-4e80-a9a8-921d1770eb9f" /> | <img width="2112" height="1117" alt="image" src="https://github.com/user-attachments/assets/e5338679-7808-4f37-9753-41b559a3cee6" /> |
 <img width="2133" height="1098" alt="image" src="https://github.com/user-attachments/assets/99858753-f80f-4cd6-9331-087af35b21b3" />
 <img width="2166" height="973" alt="image" src="https://github.com/user-attachments/assets/6097da38-9dcc-46c0-a515-5904b81203d6" />
+
+
+## CLIProxyAPI 新版本兼容说明（2026-02）
+
+CLIProxyAPI 新版本将管理接口集中到 `\/v0\/management\/*`，例如：
+- `\/v0\/management\/usage`
+- `\/v0\/management\/auth-files`
+- `\/v0\/management\/usage-statistics-enabled`
+
+本项目会自动将 `CLIPROXY_API_BASE_URL` 规范化到管理前缀，
+因此你仍可填写根地址（如 `http://192.168.1.25:8317`），系统会自动适配。
+
+> 若直接访问 `\/api\/user` 返回 `amp upstream proxy not available`，通常不影响本看板同步；
+> 看板核心依赖的是 `\/v0\/management\/*` 与 `\/v1\/models`。

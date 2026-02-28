@@ -121,3 +121,8 @@
 ## 2025-12-29
 
 - 初始化鉴权中间件、同步接口结构与基础文档，形成项目最初可用版本。
+## 2026-02-28
+
+- 兼容 CLIProxyAPI 新版管理接口前缀：统一以 `\/v0\/management\/*` 拉取 usage / auth-files / usage-statistics-enabled。
+- `/api/sync` 入库改为分批写入（每批 500 条），降低单次大 payload 导致插入失败的风险。
+- 文档补充：`\/api\/user` 返回 `amp upstream proxy not available` 与看板同步链路的关系说明。
